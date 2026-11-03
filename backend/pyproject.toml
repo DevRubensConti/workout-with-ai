@@ -1,0 +1,49 @@
+[project]
+name = "workout-ai-backend"
+version = "0.1.0"
+description = "API do assistente de treinos com IA"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.16.0",
+    "bcrypt>=5.0.0",
+    "fastapi-mail>=1.6.2",
+    "fastapi[standard]>=0.124.0",
+    "loguru>=0.7.3",
+    "psycopg2-binary>=2.9.11",
+    "pydantic-settings>=2.12.0",
+    "python-jose[cryptography]>=3.5.0",
+    "sqlalchemy>=2.0.44",
+    "uvicorn[standard]>=0.38.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "ruff>=0.14.8",
+    "taskipy>=1.14.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.taskipy.tasks]
+api = "uvicorn src.main:app --reload"
+test = "pytest"
+lint = "ruff check ."
+migrate = "alembic upgrade head"
+create_admin = "python -m src.scripts.create_admin"

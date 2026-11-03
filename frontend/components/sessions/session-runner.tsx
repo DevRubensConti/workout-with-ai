@@ -1,0 +1,542 @@
+'use client';
+
+import { Check, Plus, Timer, Trash2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { ExerciseImage } from '@/components/exercises/exercise-image';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { ApiError, apiFetch } from '@/lib/api';
+import { muscleLabel } from '@/lib/exercises';
+import {
+  formatClock,
+  parseApiDate,
+  parseReps,
+  parseWeight,
+  rowsFromSession,
+  rowsToPayload,
+  type ExerciseRows,
+  type SessionDetail,
+  type SetRow,
+} from '@/lib/sessions';
+import { formatReps, formatRest, formatWeight, nextKey } from '@/lib/workouts';
+import { cn } from '@/lib/utils';
+
+type SaveState = 'saved' | 'pending' | 'saving' | 'invalid' | 'error';
+
+const SAVE_LABEL: Record<SaveState, string> = {
+  saved: 'Salvo',
+  pending: 'Alterações pendentes…',
+  saving: 'Salvando…',
+  invalid: 'Há valores inválidos',
+  error: 'Falha ao salvar',
+};
+
+const AUTOSAVE_DELAY_MS = 500;
+
+interface SessionRunnerProps {
+  session: SessionDetail;
+  onFinished: (detail: SessionDetail) => void;
+  onCancelled: () => void;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiError ? error.message : fallback;
+}
+
+export function SessionRunner({
+  session,
+  onFinished,
+  onCancelled,
+}: SessionRunnerProps) {
+  const [initialRows] = useState(() => rowsFromSession(session));
+  const [rows, setRows] = useState<ExerciseRows[]>(initialRows);
+  const rowsRef = useRef<ExerciseRows[]>(initialRows);
+  const editCount = useRef(0);
+  const timer = useRef<number | null>(null);
+  const chain = useRef<Promise<boolean>>(Promise.resolve(true));
+
+  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [now, setNow] = useState(() => Date.now());
+  const [restEnd, setRestEnd] = useState<number | null>(null);
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [effort, setEffort] = useState<number | null>(null);
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState<'finish' | 'cancel' | null>(null);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  function persist(): Promise<boolean> {
+    chain.current = chain.current.then(async () => {
+      const payload = rowsToPayload(rowsRef.current);
+      if (payload === null) {
+        setSaveState('invalid');
+        return false;
+      }
+      const seen = editCount.current;
+      setSaveState('saving');
+      try {
+        await apiFetch(`/sessions/${session.id}/sets`, {
+          method: 'PUT',
+          body: { sets: payload },
+        });
+        setSaveState(editCount.current === seen ? 'saved' : 'pending');
+        return true;
+      } catch {
+        setSaveState('error');
+        return false;
+      }
+    });
+    return chain.current;
+  }
+
+  function update(change: (current: ExerciseRows[]) => ExerciseRows[]) {
+    const next = change(rowsRef.current);
+    rowsRef.current = next;
+    editCount.current += 1;
+    setRows(next);
+    setSaveState('pending');
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      void persist();
+    }, AUTOSAVE_DELAY_MS);
+  }
+
+  function patchSet(exerciseId: string, key: string, patch: Partial<SetRow>) {
+    update((current) =>
+      current.map((exercise) =>
+        exercise.exerciseId === exerciseId
+          ? {
+              ...exercise,
+              sets: exercise.sets.map((set) =>
+                set.key === key ? { ...set, ...patch } : set
+              ),
+            }
+          : exercise
+      )
+    );
+  }
+
+  function toggleSet(exercise: ExerciseRows, set: SetRow) {
+    const completed = !set.completed;
+    patchSet(exercise.exerciseId, set.key, { completed });
+    const rest = exercise.target?.rest_seconds;
+    if (completed && rest) setRestEnd(now + rest * 1000);
+  }
+
+  function addSet(exerciseId: string) {
+    update((current) =>
+      current.map((exercise) => {
+        if (exercise.exerciseId !== exerciseId) return exercise;
+        const last = exercise.sets[exercise.sets.length - 1];
+        return {
+          ...exercise,
+          sets: [
+            ...exercise.sets,
+            {
+              key: nextKey(),
+              reps: last?.reps ?? '10',
+              weight: last?.weight ?? '',
+              completed: false,
+            },
+          ],
+        };
+      })
+    );
+  }
+
+  function removeSet(exerciseId: string, key: string) {
+    update((current) =>
+      current.map((exercise) =>
+        exercise.exerciseId === exerciseId
+          ? {
+              ...exercise,
+              sets: exercise.sets.filter((set) => set.key !== key),
+            }
+          : exercise
+      )
+    );
+  }
+
+  async function finish() {
+    setBusy('finish');
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (!(await persist())) {
+      toast.error('Corrija os valores inválidos antes de finalizar.');
+      setBusy(null);
+      return;
+    }
+    try {
+      const detail = await apiFetch<SessionDetail>(
+        `/sessions/${session.id}/finish`,
+        {
+          method: 'POST',
+          body: { notes: notes.trim() || null, perceived_effort: effort },
+        }
+      );
+      toast.success('Treino finalizado. Bom trabalho!');
+      onFinished(detail);
+    } catch (error) {
+      toast.error(errorMessage(error, 'Não foi possível finalizar o treino.'));
+      setBusy(null);
+    }
+  }
+
+  async function cancel() {
+    setBusy('cancel');
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    try {
+      await apiFetch(`/sessions/${session.id}`, { method: 'DELETE' });
+      toast.success('Treino cancelado.');
+      onCancelled();
+    } catch (error) {
+      toast.error(errorMessage(error, 'Não foi possível cancelar o treino.'));
+      setBusy(null);
+    }
+  }
+
+  const total = rows.reduce((sum, exercise) => sum + exercise.sets.length, 0);
+  const done = rows.reduce(
+    (sum, exercise) =>
+      sum + exercise.sets.filter((set) => set.completed).length,
+    0
+  );
+  const elapsed = (now - parseApiDate(session.started_at).getTime()) / 1000;
+  const restLeft = restEnd !== null ? Math.ceil((restEnd - now) / 1000) : null;
+
+  return (
+    <div className="pb-28">
+      <div className="bg-background/90 sticky top-16 z-30 border-b backdrop-blur">
+        <div className="container mx-auto max-w-3xl space-y-2 px-4 py-3 md:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">
+                {session.day_name ?? 'Treino'}
+              </p>
+              <p className="text-muted-foreground truncate text-xs">
+                {session.plan_name}
+              </p>
+            </div>
+            <div className="text-right">
+              <p
+                className="font-mono text-xl font-semibold tabular-nums"
+                aria-label="Tempo de treino"
+              >
+                {formatClock(elapsed)}
+              </p>
+              <p
+                className={cn(
+                  'text-xs',
+                  saveState === 'invalid' || saveState === 'error'
+                    ? 'text-destructive'
+                    : 'text-muted-foreground'
+                )}
+                aria-live="polite"
+              >
+                {SAVE_LABEL[saveState]}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={total}
+              aria-valuenow={done}
+              aria-label="Séries concluídas"
+              className="bg-muted h-2 flex-1 overflow-hidden rounded-full"
+            >
+              <div
+                className="bg-primary h-full transition-all"
+                style={{ width: `${total ? (done / total) * 100 : 0}%` }}
+              />
+            </div>
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {done}/{total} séries
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6">
+        {rows.map((exercise) => (
+          <section
+            key={exercise.exerciseId}
+            aria-label={exercise.name}
+            className="bg-card rounded-xl border p-4 shadow-sm"
+          >
+            <div className="flex items-start gap-3">
+              <span className="bg-muted relative h-14 w-20 shrink-0 overflow-hidden rounded-lg">
+                <ExerciseImage
+                  key={exercise.images[0] ?? 'empty'}
+                  path={exercise.images[0]}
+                  alt=""
+                  sizes="80px"
+                />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="leading-snug font-semibold">{exercise.name}</h3>
+                <p className="text-muted-foreground text-sm">
+                  {exercise.muscleGroup
+                    ? muscleLabel(exercise.muscleGroup)
+                    : ''}
+                </p>
+                {exercise.target && (
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Meta: {exercise.target.sets} ×{' '}
+                    {formatReps(
+                      exercise.target.reps_min,
+                      exercise.target.reps_max
+                    )}
+                    {exercise.target.target_weight_kg !== null &&
+                      ` · ${formatWeight(exercise.target.target_weight_kg)}`}
+                    {exercise.target.rest_seconds !== null &&
+                      ` · descanso ${formatRest(exercise.target.rest_seconds)}`}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {exercise.target?.notes && (
+              <p className="text-muted-foreground mt-2 text-xs italic">
+                {exercise.target.notes}
+              </p>
+            )}
+
+            <div className="mt-4 space-y-2">
+              <div className="text-muted-foreground grid grid-cols-[2rem_1fr_1fr_2.5rem_1.75rem] items-center gap-2 px-1 text-xs font-medium">
+                <span>Série</span>
+                <span>Carga (kg)</span>
+                <span>Reps</span>
+                <span className="sr-only">Concluir</span>
+                <span className="sr-only">Remover</span>
+              </div>
+              {exercise.sets.map((set, index) => {
+                const weightInvalid = parseWeight(set.weight) === undefined;
+                const repsInvalid = parseReps(set.reps) === null;
+                return (
+                  <div
+                    key={set.key}
+                    className={cn(
+                      'grid grid-cols-[2rem_1fr_1fr_2.5rem_1.75rem] items-center gap-2 rounded-lg p-1 transition-colors',
+                      set.completed && 'bg-primary/10'
+                    )}
+                  >
+                    <span className="text-muted-foreground text-center text-sm font-medium tabular-nums">
+                      {index + 1}
+                    </span>
+                    <Input
+                      value={set.weight}
+                      inputMode="decimal"
+                      placeholder="—"
+                      aria-label={`Carga da série ${index + 1} de ${exercise.name}`}
+                      aria-invalid={weightInvalid}
+                      onChange={(event) =>
+                        patchSet(exercise.exerciseId, set.key, {
+                          weight: event.target.value,
+                        })
+                      }
+                      className="h-10 text-center"
+                    />
+                    <Input
+                      value={set.reps}
+                      inputMode="numeric"
+                      aria-label={`Repetições da série ${index + 1} de ${exercise.name}`}
+                      aria-invalid={repsInvalid}
+                      onChange={(event) =>
+                        patchSet(exercise.exerciseId, set.key, {
+                          reps: event.target.value,
+                        })
+                      }
+                      className="h-10 text-center"
+                    />
+                    <button
+                      type="button"
+                      aria-pressed={set.completed}
+                      aria-label={`${set.completed ? 'Desmarcar' : 'Concluir'} série ${index + 1} de ${exercise.name}`}
+                      onClick={() => toggleSet(exercise, set)}
+                      className={cn(
+                        'flex size-10 items-center justify-center rounded-lg border transition-colors',
+                        set.completed
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'text-muted-foreground hover:border-primary hover:text-primary'
+                      )}
+                    >
+                      <Check className="size-5" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remover série ${index + 1} de ${exercise.name}`}
+                      onClick={() => removeSet(exercise.exerciseId, set.key)}
+                      className="text-muted-foreground hover:text-destructive flex size-7 items-center justify-center rounded-md"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => addSet(exercise.exerciseId)}
+            >
+              <Plus /> Adicionar série
+            </Button>
+          </section>
+        ))}
+
+        <div className="flex flex-wrap justify-between gap-3 pt-2">
+          <Button
+            variant="outline"
+            className="text-destructive"
+            onClick={() => setCancelOpen(true)}
+            disabled={busy !== null}
+          >
+            <Trash2 /> Cancelar treino
+          </Button>
+          <Button
+            size="lg"
+            onClick={() => setFinishOpen(true)}
+            disabled={done === 0 || busy !== null}
+          >
+            <Check /> Finalizar treino
+          </Button>
+        </div>
+      </div>
+
+      {restLeft !== null && (
+        <div
+          role="status"
+          className="bg-card fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit items-center gap-3 rounded-full border px-5 py-3 shadow-lg"
+        >
+          <Timer className="text-primary size-5" />
+          <span className="text-sm font-medium">
+            {restLeft > 0 ? (
+              <>
+                Descanso{' '}
+                <span className="font-mono tabular-nums">
+                  {formatClock(restLeft)}
+                </span>
+              </>
+            ) : (
+              'Hora da próxima série!'
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => setRestEnd(null)}
+            className="text-muted-foreground hover:text-foreground text-sm"
+          >
+            {restLeft > 0 ? 'Pular' : 'Fechar'}
+          </button>
+        </div>
+      )}
+
+      <Dialog
+        open={finishOpen}
+        onOpenChange={(open) => !busy && setFinishOpen(open)}
+      >
+        <DialogContent className="max-w-md">
+          <div className="space-y-5 p-6">
+            <div className="space-y-1 pr-8">
+              <DialogTitle>Finalizar treino</DialogTitle>
+              <DialogDescription>
+                {done} {done === 1 ? 'série concluída' : 'séries concluídas'}.
+                As séries não marcadas não entram no histórico.
+              </DialogDescription>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                Como foi o esforço?{' '}
+                <span className="text-muted-foreground font-normal">
+                  (1 leve · 10 máximo)
+                </span>
+              </p>
+              <div
+                role="group"
+                aria-label="Esforço percebido"
+                className="grid grid-cols-5 gap-2"
+              >
+                {Array.from({ length: 10 }, (_, index) => index + 1).map(
+                  (value) => (
+                    <button
+                      type="button"
+                      key={value}
+                      aria-pressed={effort === value}
+                      onClick={() => setEffort(effort === value ? null : value)}
+                      className={cn(
+                        'h-10 rounded-lg border text-sm font-medium transition-colors',
+                        effort === value
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {value}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              rows={3}
+              maxLength={2000}
+              aria-label="Observações do treino"
+              placeholder="Observações (opcional): como se sentiu, dores, ajustes…"
+              className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+            />
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setFinishOpen(false)}
+                disabled={busy !== null}
+              >
+                Voltar
+              </Button>
+              <Button onClick={finish} disabled={busy !== null}>
+                {busy === 'finish' ? 'Finalizando…' : 'Finalizar'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={cancelOpen}
+        title="Cancelar este treino?"
+        description="O que você registrou nesta sessão será descartado e não aparecerá no histórico."
+        confirmLabel="Cancelar treino"
+        destructive
+        pending={busy === 'cancel'}
+        onCancel={() => setCancelOpen(false)}
+        onConfirm={cancel}
+      />
+    </div>
+  );
+}
