@@ -9,6 +9,8 @@ from src.auth.models import User
 from src.database import get_session
 from src.workouts import session_service
 from src.workouts.session_schemas import (
+    ConsistencyProgress,
+    ExerciseProgress,
     SessionDetail,
     SessionFinishIn,
     SessionListResponse,
@@ -17,6 +19,25 @@ from src.workouts.session_schemas import (
 )
 
 router = APIRouter()
+
+
+@router.get("/progress/consistency", response_model=ConsistencyProgress)
+def read_consistency(
+    current_user: User = Depends(require_permissions("workouts:read")),
+    session: Session = Depends(get_session),
+):
+    return session_service.consistency_progress(session, current_user.id)
+
+
+@router.get("/progress/exercises/{exercise_id}", response_model=ExerciseProgress)
+def read_exercise_progress(
+    exercise_id: UUID,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=50)] = 20,
+    current_user: User = Depends(require_permissions("workouts:read")),
+    session: Session = Depends(get_session),
+):
+    return session_service.exercise_progress(session, current_user.id, exercise_id, page, page_size)
 
 
 def _not_found() -> HTTPException:

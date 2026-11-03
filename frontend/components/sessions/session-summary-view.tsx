@@ -14,6 +14,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { ConsistencyProgress } from '@/components/sessions/consistency-progress';
+import { ExerciseProgress } from '@/components/sessions/exercise-progress';
 import { ExerciseImage } from '@/components/exercises/exercise-image';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch } from '@/lib/api';
@@ -129,6 +131,8 @@ export function SessionSummaryView({
         </p>
       )}
 
+      <ConsistencyProgress />
+
       <ol className="space-y-3">
         {session.exercises.map((exercise) => (
           <li
@@ -166,6 +170,9 @@ export function SessionSummaryView({
                 </li>
               ))}
             </ul>
+            <div className="mt-4">
+              <ExerciseProgress exerciseId={exercise.exercise_id} />
+            </div>
           </li>
         ))}
       </ol>

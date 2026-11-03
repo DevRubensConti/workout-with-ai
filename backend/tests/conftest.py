@@ -8,6 +8,7 @@ os.environ.update(
         "SECRET_KEY": "test-secret-key-test-secret-key-0123456789",
         "PEPPER": "test-pepper-0123456789",
         "FRONTEND_URL": "http://localhost:3000",
+        "GEMINI_API_KEY": "",
     }
 )
 

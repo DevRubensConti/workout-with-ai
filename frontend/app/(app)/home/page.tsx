@@ -17,9 +17,9 @@ const modules = [
   {
     title: 'Assistente de IA',
     description:
-      'Converse e receba treinos personalizados para o seu objetivo.',
+      'Gere um treino com Gemini, considerando seu perfil e suas preferências.',
     icon: Bot,
-    href: undefined,
+    href: '/workouts/generate',
   },
   {
     title: 'Meus treinos',

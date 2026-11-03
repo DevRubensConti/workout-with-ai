@@ -54,6 +54,31 @@ export interface SessionListResponse {
   total_pages: number;
 }
 
+export interface ExerciseProgress {
+  exercise_id: string;
+  personal_record_kg: number | null;
+  personal_record_at: string | null;
+  completed_sessions: number;
+  page: number;
+  total_pages: number;
+  points: {
+    session_id: string;
+    performed_at: string;
+    max_weight_kg: number | null;
+    volume_kg: number;
+    sets: SetLog[];
+  }[];
+}
+
+export interface ConsistencyProgress {
+  completed_sessions: number;
+  achievements: {
+    sessions_required: number;
+    label: string;
+    unlocked: boolean;
+  }[];
+}
+
 export function formatDuration(seconds: number) {
   const minutes = Math.round(seconds / 60);
   if (seconds < 60) return `${seconds}s`;
@@ -95,6 +120,16 @@ export function formatDateTime(iso: string) {
     minute: '2-digit',
   });
   return `${day} · ${time}`;
+}
+
+export function formatProgressDate(iso: string) {
+  return parseApiDate(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function formatSetLog(set: Pick<SetLog, 'reps' | 'weight_kg'>) {

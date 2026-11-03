@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = "http://localhost:3000"
     FRONTEND_URL: str = "http://localhost:3000"
 
+    GEMINI_API_KEY: SecretStr | None = None
+    GEMINI_PERSONAL_DATA_ENABLED: bool = False
+    GEMINI_MODEL: str = Field(default="gemini-3.6-flash", pattern=r"^gemini-[a-zA-Z0-9._-]+$")
+    GEMINI_TIMEOUT_SECONDS: int = Field(default=90, ge=10, le=180)
+    GEMINI_MAX_OUTPUT_TOKENS: int = Field(default=32768, ge=12000, le=65536)
+
     # E-mail (opcional)
     MAIL_SERVER: str | None = None
     MAIL_PORT: int = 587

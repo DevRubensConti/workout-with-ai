@@ -17,6 +17,8 @@ export interface GenerateInput {
   split_style: SplitStyle;
   focus_muscles: string[];
   avoid_muscles: string[];
+  preferences: string;
+  complaint_details: string;
 }
 
 export interface GeneratedExercise {
@@ -30,6 +32,7 @@ export interface GeneratedExercise {
   reps_min: number;
   reps_max: number;
   rest_seconds: number;
+  notes?: string | null;
 }
 
 export interface GeneratedDay {
@@ -53,6 +56,12 @@ export interface Reference {
 
 // Parte do resultado que é guardada junto do treino (ai_metadata).
 export interface AiInfo {
+  generator?: 'rules' | 'gemini';
+  model?: string | null;
+  prompt_version?: string | null;
+  consent_version?: string | null;
+  consented_at?: string | null;
+  profile_updated_at?: string | null;
   rules_version: string;
   review_status: string;
   split: string;
@@ -225,6 +234,8 @@ export const DEFAULT_INPUT: GenerateInput = {
   split_style: 'auto',
   focus_muscles: [],
   avoid_muscles: [],
+  preferences: '',
+  complaint_details: '',
 };
 
 export function draftFromGenerated(plan: GeneratedPlan): Draft {
@@ -252,14 +263,14 @@ export function draftFromGenerated(plan: GeneratedPlan): Draft {
         weight: '',
         rest: String(exercise.rest_seconds),
         tempo: null,
-        notes: '',
+        notes: exercise.notes ?? '',
       })),
     })),
   };
 }
 
 export function aiMetadata({ info, input }: GenerationInfo) {
-  return { generator: 'rules', inputs: input, ...info };
+  return { ...info, generator: info.generator ?? 'rules', inputs: input };
 }
 
 // Lê o que foi guardado em ai_metadata, tolerando dados antigos ou incompletos.
@@ -268,6 +279,18 @@ export function extractAiInfo(metadata: unknown): AiInfo | null {
   const data = metadata as Record<string, unknown>;
   if (!Array.isArray(data.rationale)) return null;
   return {
+    generator: data.generator === 'gemini' ? 'gemini' : 'rules',
+    model: typeof data.model === 'string' ? data.model : null,
+    prompt_version:
+      typeof data.prompt_version === 'string' ? data.prompt_version : null,
+    consent_version:
+      typeof data.consent_version === 'string' ? data.consent_version : null,
+    consented_at:
+      typeof data.consented_at === 'string' ? data.consented_at : null,
+    profile_updated_at:
+      typeof data.profile_updated_at === 'string'
+        ? data.profile_updated_at
+        : null,
     rules_version: String(data.rules_version ?? ''),
     review_status: String(data.review_status ?? ''),
     split: String(data.split ?? ''),

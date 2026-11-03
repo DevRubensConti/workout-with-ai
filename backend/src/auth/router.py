@@ -1,11 +1,12 @@
 from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from src.auth.dependencies import COOKIE_NAME, require_permissions
-from src.auth.models import User
+from src.auth.models import TrainingProfile, User
 from src.auth.permissions import permissions_for_role
 from src.auth.schemas import (
     ChangePasswordRequest,
@@ -14,7 +15,10 @@ from src.auth.schemas import (
     MessageResponse,
     RegisterRequest,
     ResetPasswordRequest,
+    TrainingProfileIn,
+    TrainingProfileOut,
     UserResponse,
+    WorkoutPreferences,
 )
 from src.auth.service import (
     EmailAlreadyRegisteredError,
@@ -116,6 +120,62 @@ def logout(response: Response):
 @router.get("/me", response_model=UserResponse)
 def read_me(current_user: User = Depends(require_permissions("profile:read"))):
     return _user_response(current_user)
+
+
+@router.get("/workout-preferences", response_model=WorkoutPreferences)
+def read_workout_preferences(current_user: User = Depends(require_permissions("profile:read"))):
+    return WorkoutPreferences(rest_timer_enabled=current_user.rest_timer_enabled)
+
+
+@router.put("/workout-preferences", response_model=WorkoutPreferences)
+def save_workout_preferences(
+    body: WorkoutPreferences,
+    current_user: User = Depends(require_permissions("profile:write")),
+    session: Session = Depends(get_session),
+):
+    current_user.rest_timer_enabled = body.rest_timer_enabled
+    session.commit()
+    return body
+
+
+@router.get("/training-profile", response_model=TrainingProfileOut | None)
+def read_training_profile(
+    current_user: User = Depends(require_permissions("profile:read")),
+    session: Session = Depends(get_session),
+):
+    return session.get(TrainingProfile, current_user.id)
+
+
+@router.put("/training-profile", response_model=TrainingProfileOut)
+def save_training_profile(
+    body: TrainingProfileIn,
+    current_user: User = Depends(require_permissions("profile:write")),
+    session: Session = Depends(get_session),
+):
+    profile = session.get(TrainingProfile, current_user.id)
+    if profile is None:
+        profile = TrainingProfile(user_id=current_user.id)
+        session.add(profile)
+    profile.age = body.age
+    profile.weight_kg = Decimal(str(body.weight_kg)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    profile.height_cm = body.height_cm
+    session.commit()
+    session.refresh(profile)
+    return profile
+
+
+@router.delete("/training-profile", status_code=status.HTTP_204_NO_CONTENT)
+def delete_training_profile(
+    current_user: User = Depends(require_permissions("profile:write")),
+    session: Session = Depends(get_session),
+):
+    profile = session.get(TrainingProfile, current_user.id)
+    if profile is not None:
+        session.delete(profile)
+        session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/forgot-password", response_model=MessageResponse)

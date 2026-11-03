@@ -91,3 +91,32 @@ class SessionListResponse(BaseModel):
     page_size: int
     total: int
     total_pages: int
+
+
+class ExerciseProgressPoint(BaseModel):
+    session_id: UUID
+    performed_at: datetime
+    max_weight_kg: float | None
+    volume_kg: float
+    sets: list[SetLogOut]
+
+
+class ExerciseProgress(BaseModel):
+    exercise_id: UUID
+    personal_record_kg: float | None
+    personal_record_at: datetime | None
+    completed_sessions: int
+    points: list[ExerciseProgressPoint]
+    page: int
+    total_pages: int
+
+
+class ConsistencyAchievement(BaseModel):
+    sessions_required: int
+    label: str
+    unlocked: bool
+
+
+class ConsistencyProgress(BaseModel):
+    completed_sessions: int
+    achievements: list[ConsistencyAchievement]

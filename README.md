@@ -205,6 +205,45 @@ O nome do treino/dia e dos exercicios fica gravado na propria sessao, entao o
 historico continua legivel se o treino for editado ou excluido. As telas ficam em
 `/sessions/{id}` (treino ao vivo ou resumo) e `/history`.
 
+### Evolucao pessoal e modo de execucao
+
+Execute `uv run alembic upgrade head` para aplicar a migration 0011, que adiciona
+somente a preferencia `users.rest_timer_enabled` (desativada por padrao).
+Em **Minha conta**, habilite **Ativar tempo de descanso** para iniciar uma
+contagem regressiva ao concluir uma serie com descanso prescrito. Desativada,
+o timer principal mostra apenas o tempo total desde o inicio do treino. A
+preferencia e carregada ao abrir/recarregar a sessao, independente do perfil fisico.
+
+O modo de execucao mostra um exercicio por vez, timer destacado, campos de carga
+e repeticoes, series, navegacao anterior/proximo e seletor de exercicio. As
+alteracoes continuam salvas automaticamente; navegar salva antes de trocar.
+O descanso usa um horario final, nao a contagem de ticks, e e reiniciado ao
+concluir outra serie; recarregar a pagina encerra o descanso local, sem perder
+o tempo total do treino nem series ja salvas.
+
+- `GET /sessions/progress/exercises/{exercise_id}?page=1&page_size=20`:
+  historico por usuario e exercicio, com data de inicio da sessao, cargas e
+  repeticoes por serie, maior carga por sessao e volume. Inclui recorde de carga
+  global e a primeira data em que foi alcancado. Pagina maxima: 50 sessoes.
+- `GET /sessions/progress/consistency`: treinos concluidos e marcos de
+  1, 5, 10, 25, 50 e 100 treinos, sem exigir dias consecutivos.
+- `GET/PUT /auth/workout-preferences`: `{ "rest_timer_enabled": false|true }`,
+  booleano estrito; leitura/escrita exigem `profile:read`/`profile:write`.
+
+As metricas usam `workout_set_logs` associados a `workout_sessions` do usuario,
+sem duplicar cargas em outra tabela. Consideram somente sessoes finalizadas e
+series marcadas com ao menos uma repeticao; cargas nulas nao viram zero no
+recorde/grafico, e carga zero registrada e um valor valido. Series em andamento,
+canceladas, nao realizadas ou de terceiros nao contam. Apagar historico
+recalcula recordes e conquistas. O grafico mostra as sessoes da pagina atual,
+da mais antiga para a mais recente, e o historico completo e paginado.
+
+Evolucao e recorde aparecem durante a execucao e no resumo; conquistas aparecem
+no resumo e no historico. As datas de evolucao incluem o ano. Durante a execucao,
+uma carga maior nas series concluidas mostra um aviso provisorio; o recorde
+so e confirmado ao finalizar o treino. Recordes nao recomendam aumento de carga: compare o
+mesmo equipamento/execucao e respeite descanso e recuperacao.
+
 ### Gerador de treinos por regras
 
 `POST /workouts/generate` (permissao `workouts:write`) devolve um **rascunho**: nada e
@@ -215,7 +254,8 @@ padrao, ou um estilo valido para o numero de dias; senao `422`), `focus_muscles`
 musculo versus a meta, os avisos, a justificativa e as referencias. O usuario revisa no
 montador e salva com `POST /workouts` usando `source: "ai"` e `ai_metadata`.
 
-Nao usa modelo de IA: e um motor deterministico em `backend/src/workouts/generator/`.
+A rota `/workouts/generate` continua sendo um motor deterministico, sem chamada de IA.
+A tela de geracao agora usa `/workouts/generate-ai`, descrita abaixo.
 
 - `rules.py`: base de regras **versionada e citada** (series por semana por musculo e nivel,
   faixas de repeticoes, descanso, esforco, progressao, referencias). Alterou algo? Atualize
@@ -238,10 +278,164 @@ Nao usa modelo de IA: e um motor deterministico em `backend/src/workouts/generat
 **Pendente antes de abrir para mais gente:** as faixas de series por semana sao heuristicas
 conservadoras e as referencias foram escritas a partir de fontes conhecidas; ambas precisam
 de revisao por um profissional de educacao fisica e conferencia nas fontes originais
-(`REVIEW_STATUS`). Nao filtra por equipamento. `avoid_muscles` continua sendo recebido
-como contexto para futura avaliacao por IA, mas nao exclui musculos nem altera a prioridade
-dos exercicios. Quando ha queixas, a resposta avisa que o treino nao foi adaptado a elas.
-A integracao com IA ainda nao esta implementada; a revisao profissional continua necessaria.
+(`REVIEW_STATUS`). O motor de regras nao filtra por equipamento. `avoid_muscles` nao
+exclui musculos nem altera a prioridade nesse motor. Na rota por regras, a resposta
+avisa que o treino nao foi adaptado as queixas.
+
+### Treino final com Google Gemini
+
+Fluxo: **Minha conta > Perfil de treino** (idade, peso em kg e altura em cm) >
+questionario > consentimento > Gemini > validacao local > revisao > salvar.
+A IA recebe a divisao e metas do plano-base (sem uma lista curada obrigatoria),
+as regras do objetivo, as mesmas referencias R1-R9 de
+`rules.py`, respostas, preferencias, queixas e dados fisicos. As referencias sao
+citacoes bibliograficas e resumos, nao o texto integral dos artigos nem uma busca
+automatica de literatura. Vincular uma justificativa a uma referencia nao prova
+que a interpretacao do modelo esteja correta; a base continua pendente de revisao.
+
+Configure no `.env` do **backend**, sem colocar a chave no frontend:
+
+```dotenv
+GEMINI_API_KEY=sua_chave
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_TIMEOUT_SECONDS=90
+GEMINI_PERSONAL_DATA_ENABLED=true
+```
+
+O modelo e configuravel; confirme sua disponibilidade no seu projeto Google.
+Antes de habilitar `GEMINI_PERSONAL_DATA_ENABLED`, confirme um projeto com
+faturamento ativo e tratamento adequado dos dados pessoais/de saude. Os
+[termos do Gemini](https://ai.google.dev/gemini-api/terms) orientam **nao enviar
+dados sensiveis ou pessoais aos servicos nao pagos**. A flag e uma habilitacao
+administrativa, nao verifica automaticamente o faturamento. Ha custos de API
+independentes de assinaturas de chat. Nao use esta funcionalidade como pratica
+clinica, diagnostico, reabilitacao ou aconselhamento medico.
+
+```powershell
+cd backend
+uv sync
+uv run alembic upgrade head
+uv run uvicorn src.main:app --reload
+```
+
+A migration 0009 cria somente `training_profiles` (privada, RLS sem policies);
+a 0010 cria `disabled_exercises` para a selecao pessoal, tambem com RLS.
+Nao alteram as tabelas musculares preservadas. O backend precisa de uma conexao
+adequada ao padrao de RLS do projeto. Nao copie `.env.example` sobre um `.env`
+ja preenchido. O cadastro fisico e exclusivo para adultos de 18 a 100 anos;
+peso aceito de 20 a 400 kg e altura de 100 a 250 cm. A idade e informada, nao
+calculada por data de nascimento: deve ser mantida atualizada.
+
+- `GET /auth/training-profile`: dados fisicos do proprio usuario ou `null`.
+- `PUT /auth/training-profile`: substitui idade, peso e altura; exige `profile:write`.
+- `DELETE /auth/training-profile`: remove esses dados; treinos anteriores nao sao apagados.
+- `POST /workouts/generate-ai`: mesmas entradas da rota por regras, mais
+  `preferences` e `complaint_details` (opcionais, ate 1000 caracteres cada),
+  `ai_consent: true` e `consent_version: "gemini-training-v1"`.
+  Exige `workouts:write`, perfil fisico completo e consentimento em cada pedido.
+
+O envio omite nome, email, senha, IDs do usuario e historico de treinos. Textos
+livres podem conter dados de identificacao inseridos pelo usuario: a tela pede
+que nao os inclua, mas nao ha garantia automatica de anonimizacao. Nao ha logs
+de prompts, perfis, chave ou resposta bruta na integracao; mantenha DEBUG
+desabilitado e nao habilite captura de corpos HTTP/SQL sensiveis na infraestrutura.
+O Google possui suas proprias regras de retencao e processamento, mesmo no plano pago.
+
+O modelo recebe **todos os exercicios habilitados e acessiveis ao usuario**,
+sem paginacao ou filtro por nivel, origem, categoria, grupo muscular ou lista curada.
+Inclui exercicios globais e manuais do proprio usuario, nunca os privados de
+outros usuarios. O contexto traz UUID interno, nome, ID de origem quando existe,
+musculos principais/secundarios, equipamento, nivel, categoria, mecanica e forca.
+Exercicios habilitados de nivel superior tambem sao enviados: adequacao ao nivel,
+objetivo e queixas cabe a IA, nao a um filtro previo.
+
+No **Catalogo de exercicios**, marque/desmarque **Habilitado para IA**, com busca
+e filtros combinaveis por musculo, equipamento, nivel, categoria, mecanica,
+tipo de forca e disponibilidade. As opcoes dos filtros vem das colunas do catalogo
+acessivel ao usuario. Todos comecam habilitados,
+inclusive novas importacoes; o banco guarda somente as exclusoes por usuario.
+As escolhas persistem entre geracoes. Desabilitar nao apaga exercicios, nao muda
+treinos ja salvos e nao impede inclusao manual no montador. O catalogo de entrada
+nao inclui desabilitados, e a validacao da resposta tambem os rejeita. Se nenhum
+estiver habilitado, a rota responde `422` sem chamar o Gemini.
+
+- `GET /exercises?enabled_for_ai=true|false`: filtro opcional, combinavel com os existentes.
+  Lista e detalhe incluem `enabled_for_ai` para o usuario autenticado.
+- `PUT /exercises/{id}/ai-availability` com `{ "enabled": true|false }`: escolha
+  pessoal idempotente, exige `workouts:write`; exercicio inacessivel responde `404`.
+- `PUT /exercises/ai-availability` com `{ "enabled": true|false }`: aplica a escolha
+  pessoal a **todos** os resultados dos mesmos filtros da listagem (`q`, `locale`,
+  `muscle_group`, `equipment`, `level`, `category`, `mechanic`, `force`,
+  `enabled_for_ai`), sem limite de pagina. Retorna `{ "matched": N, "updated": M }`
+  em uma unica transacao e exige `workouts:write`. A interface pede confirmacao
+  com filtros e quantidade antes da acao; sem filtros, alcanca todo o catalogo
+  acessivel. Os resultados sao reavaliados ao confirmar. Nao altera outros usuarios.
+
+O Gemini identifica a resposta por `exercise_index` (inteiro de zero ate o
+tamanho do catalogo menos um), nao por UUID ou `source_id`. Cada entrada do
+catalogo completo recebe seu indice para aquela requisicao. O schema usa limites
+numericos, sem um `enum` gigante de UUIDs, que pode exceder a complexidade aceita
+pelo provedor. O backend exige um inteiro estrito no intervalo e o converte no
+UUID da mesma entrada do catalogo enviado. O indice nao e persistido e pode mudar
+entre requisicoes. A API do aplicativo continua retornando `exercise_id` (UUID).
+A validacao local continua rejeitando indices invalidos, exercicios desconhecidos
+e desabilitados durante a geracao; nao ha substituicao por nome ou similaridade.
+A classificacao `role` e fornecida pela IA para exercicios fora da lista curada;
+quando ha classificacao curada, o servidor a valida. O plano pode ser gerado
+mesmo sem nenhum exercicio da lista curada habilitado.
+As queixas sao avaliadas pela IA, sem exclusao deterministica por grupo muscular.
+Se ela solicitar avaliacao profissional, nenhum treino e apresentado como final.
+Nao ha filtro por equipamento no servidor: equipamentos e outras preferencias
+em texto sao instrucoes ao modelo e devem ser conferidos na revisao.
+
+A resposta JSON e validada localmente: UUIDs habilitados e acessiveis, dias e ordem da divisao,
+ausencia de duplicatas no dia, limites de series/repeticoes/descanso, duracao
+estimada dentro do tempo disponivel e IDs de referencias conhecidos.
+O schema enviado ao Gemini omite `minItems`/`maxItems`, pois os limites das
+listas aninhadas podem provocar HTTP 400. Os limites de quantidade de dias,
+exercicios, justificativas, avisos e referencias continuam obrigatorios na
+validacao Pydantic local; o contrato de resposta nao muda.
+Nomes, imagens, equipamentos, volume semanal e duracao sao derivados no servidor,
+nao aceitos diretamente do modelo. Volumes abaixo da meta geral produzem um aviso,
+sem impedir as adaptacoes por queixas. As orientacoes de cada exercicio chegam ao
+montador e sao preservadas ao salvar. Isso valida estrutura e limites, **nao
+seguranca clinica nem fidelidade cientifica**. A composicao muscular de cada dia
+e orientada pelo prompt, nao por uma comparacao rigida entre codigos de grupos,
+pois todo o catalogo possui grupos fora das metas originais. Esses grupos extras
+aparecem no volume semanal como **sem meta definida**, sem inventar metas cientificas.
+Enviar o catalogo completo aumenta tokens, latencia e custo; nao ha truncamento
+silencioso nem selecao automatica de uma amostra.
+
+Erros sao explicitos: `422` para perfil/consentimento invalido ou avaliacao
+profissional necessaria, `503` para configuracao, indisponibilidade, cota ou timeout,
+`502` para resposta invalida/bloqueada/truncada. Nao ha retry automatico nem fallback
+silencioso para regras. Nenhum treino e salvo ate a confirmacao no montador.
+Para falhas HTTP do provedor, a mensagem identifica o codigo de origem:
+400 (requisicao rejeitada), 401 (autenticacao), 402 (creditos/faturamento),
+403 (permissao), 404 (modelo) e 429 (limite/cota). A API continua respondendo
+503 nesses casos. Nao repassa o corpo do erro do Google nem dados sensiveis.
+Rejeicoes locais (502) incluem um codigo seguro no erro e no log `motivo=...`,
+como `token_limit`, `schema_validation`, `day_structure`, `references`,
+`unknown_exercise`, `exercise_role` ou `session_duration`. Para erros de schema,
+o log informa somente nomes de campos conhecidos e quantidade de erros, sem
+valores, resposta bruta, IDs de exercicios ou caminhos arbitrarios.
+`token_limit` indica que o Gemini terminou com `MAX_TOKENS`, sem completar a
+resposta; nao significa falta de cota. O orcamento de saida agora e de 32768
+tokens por padrao (antes, 12000). Pode ser ajustado no backend com
+`GEMINI_MAX_OUTPUT_TOKENS=32768`, entre 12000 e 65536, respeitando o limite do
+modelo escolhido. Aumentar o teto pode aumentar custo e latencia; nao garante
+que qualquer geracao seja concluida. O log desse erro inclui somente o teto e
+contadores numericos de tokens de entrada, resposta e raciocinio quando presentes.
+O raciocinio do modelo permanece no padrao do provedor. Respostas truncadas
+continuam rejeitadas, sem retry automatico, alteracao do catalogo ou salvamento.
+O metadata guarda provedor, modelo, versoes de regras/prompt/consentimento,
+horario do consentimento, data de atualizacao do perfil, questionario e
+justificativas; nao copia as medidas fisicas. Esses metadados editaveis nao
+constituem um registro imutavel de consentimento.
+
+Antes de abrir o app ao publico, adicione limites de requisicoes/custos por
+usuario e revise consentimento, retencao, termos e seguranca profissional.
+Os testes da integracao usam respostas simuladas, sem enviar dados reais ao Google.
 
 ### Importar a base inglesa
 

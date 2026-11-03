@@ -3,10 +3,15 @@
 import {
   ChevronLeft,
   ChevronRight,
+  CheckCheck,
   Dumbbell,
+  Loader2,
+  SlidersHorizontal,
+  Sparkles,
   SearchX,
   Search,
   X,
+  XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -16,9 +21,20 @@ import {
 } from '@/components/exercises/exercise-card';
 import { ExerciseDetailDialog } from '@/components/exercises/exercise-detail-dialog';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ApiError, apiFetch } from '@/lib/api';
 import {
   equipmentLabel,
+  categoryLabel,
+  forceLabel,
+  levelLabel,
+  mechanicLabel,
   muscleLabel,
   type ExerciseCatalogResponse,
   type ExerciseDetail,
@@ -26,6 +42,8 @@ import {
   type ExerciseLocale,
 } from '@/lib/exercises';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/components/auth-provider';
+import { toast } from 'sonner';
 
 interface RequestState<T> {
   key: string;
@@ -48,11 +66,26 @@ function errorMessage(error: unknown) {
 }
 
 export function ExerciseCatalog() {
+  const user = useAuth();
+  const canChoose = user.permissions.includes('workouts:write');
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+  const [availability, setAvailability] = useState('');
   const [locale, setLocale] = useState<ExerciseLocale>('pt-BR');
   const [searchInput, setSearchInput] = useState('');
   const [query, setQuery] = useState('');
   const [muscleGroup, setMuscleGroup] = useState('');
   const [equipment, setEquipment] = useState('');
+  const [level, setLevel] = useState('');
+  const [category, setCategory] = useState('');
+  const [mechanic, setMechanic] = useState('');
+  const [force, setForce] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [pendingBulk, setPendingBulk] = useState<{
+    enabled: boolean;
+    params: string;
+    total: number;
+    labels: string[];
+  } | null>(null);
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listRetry, setListRetry] = useState(0);
@@ -73,17 +106,29 @@ export function ExerciseCatalog() {
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
 
-  const listUrl = useMemo(() => {
-    const params = new URLSearchParams({
-      locale,
-      page: String(page),
-      page_size: String(PAGE_SIZE),
-    });
+  const filterParams = useMemo(() => {
+    const params = new URLSearchParams({ locale });
     if (query) params.set('q', query);
     if (muscleGroup) params.set('muscle_group', muscleGroup);
     if (equipment) params.set('equipment', equipment);
-    return `/exercises?${params.toString()}`;
-  }, [equipment, locale, muscleGroup, page, query]);
+    if (availability) params.set('enabled_for_ai', availability);
+    if (level) params.set('level', level);
+    if (category) params.set('category', category);
+    if (mechanic) params.set('mechanic', mechanic);
+    if (force) params.set('force', force);
+    return params.toString();
+  }, [
+    availability,
+    category,
+    equipment,
+    force,
+    level,
+    locale,
+    mechanic,
+    muscleGroup,
+    query,
+  ]);
+  const listUrl = `/exercises?${filterParams}&page=${page}&page_size=${PAGE_SIZE}`;
   const listRequestKey = `${listUrl}:${listRetry}`;
 
   useEffect(() => {
@@ -96,6 +141,9 @@ export function ExerciseCatalog() {
         if (controller.signal.aborted) return;
         setListState({ key: listRequestKey, data });
         setFilters(data.filters);
+        if (data.page > Math.max(1, data.total_pages)) {
+          setPage(Math.max(1, data.total_pages));
+        }
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -145,15 +193,123 @@ export function ExerciseCatalog() {
 
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
   const selectedSummary = selectedIndex >= 0 ? items[selectedIndex] : undefined;
-  const hasActiveFilters = Boolean(searchInput || muscleGroup || equipment);
+  const filterControls = [
+    {
+      key: 'equipment',
+      label: 'Equipamento',
+      value: equipment,
+      set: setEquipment,
+      options: filters?.equipment ?? [],
+      format: equipmentLabel,
+    },
+    {
+      key: 'level',
+      label: 'Nível',
+      value: level,
+      set: setLevel,
+      options: filters?.levels ?? [],
+      format: levelLabel,
+    },
+    {
+      key: 'category',
+      label: 'Categoria',
+      value: category,
+      set: setCategory,
+      options: filters?.categories ?? [],
+      format: categoryLabel,
+    },
+    {
+      key: 'mechanic',
+      label: 'Mecânica',
+      value: mechanic,
+      set: setMechanic,
+      options: filters?.mechanics ?? [],
+      format: mechanicLabel,
+    },
+    {
+      key: 'force',
+      label: 'Tipo de força',
+      value: force,
+      set: setForce,
+      options: filters?.forces ?? [],
+      format: forceLabel,
+    },
+    {
+      key: 'availability',
+      label: 'Disponibilidade para IA',
+      value: availability,
+      set: setAvailability,
+      options: ['true', 'false'],
+      format: (value: string) =>
+        value === 'true' ? 'Habilitados' : 'Desabilitados',
+    },
+  ];
+  const activeFilters = [
+    ...(query
+      ? [
+          {
+            key: 'query',
+            label: `Busca: ${query}`,
+            clear: () => {
+              setSearchInput('');
+              setQuery('');
+            },
+          },
+        ]
+      : []),
+    ...(muscleGroup
+      ? [
+          {
+            key: 'muscle',
+            label: muscleLabel(muscleGroup),
+            clear: () => setMuscleGroup(''),
+          },
+        ]
+      : []),
+    ...filterControls
+      .filter((filter) => filter.value)
+      .map((filter) => ({
+        key: filter.key,
+        label: `${filter.label}: ${filter.format(filter.value)}`,
+        clear: () => filter.set(''),
+      })),
+  ];
+  const hasActiveFilters = Boolean(searchInput || activeFilters.length);
+  const mutationBusy = bulkSaving || savingIds.size > 0;
+  const bulkDisabled =
+    mutationBusy ||
+    listLoading ||
+    !listData?.total ||
+    searchInput.trim() !== query;
+
+  async function changeAvailability(id: string, enabled: boolean) {
+    setSavingIds((current) => new Set(current).add(id));
+    try {
+      await apiFetch(`/exercises/${id}/ai-availability`, {
+        method: 'PUT',
+        body: { enabled },
+      });
+      if (availability && items.length === 1 && page > 1) setPage(page - 1);
+      setListRetry((value) => value + 1);
+      setDetailRetry((value) => value + 1);
+      toast.success(
+        enabled
+          ? 'Exercício habilitado para a IA.'
+          : 'Exercício desabilitado para a IA.'
+      );
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setSavingIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
 
   function changeMuscleGroup(value: string) {
     setMuscleGroup(value);
-    setPage(1);
-  }
-
-  function changeEquipment(value: string) {
-    setEquipment(value);
     setPage(1);
   }
 
@@ -162,7 +318,47 @@ export function ExerciseCatalog() {
     setQuery('');
     setMuscleGroup('');
     setEquipment('');
+    setAvailability('');
+    setLevel('');
+    setCategory('');
+    setMechanic('');
+    setForce('');
     setPage(1);
+  }
+
+  async function changeFilteredAvailability() {
+    if (!pendingBulk || mutationBusy) return;
+    setBulkSaving(true);
+    try {
+      const result = await apiFetch<{ matched: number; updated: number }>(
+        `/exercises/ai-availability?${pendingBulk.params}`,
+        { method: 'PUT', body: { enabled: pendingBulk.enabled } }
+      );
+      setPendingBulk(null);
+      setPage(1);
+      setListRetry((value) => value + 1);
+      setDetailRetry((value) => value + 1);
+      const action = pendingBulk.enabled ? 'habilitado' : 'desabilitado';
+      const plural = result.updated !== 1;
+      toast.success(
+        result.updated === 0
+          ? 'Nenhuma alteração necessária.'
+          : `${result.updated.toLocaleString('pt-BR')} ${
+              plural ? 'exercícios' : 'exercício'
+            } ${action}${plural ? 's' : ''} para a IA.`,
+        {
+          description: `${result.matched.toLocaleString('pt-BR')} ${
+            result.matched === 1
+              ? 'resultado corresponde'
+              : 'resultados correspondem'
+          } aos filtros aplicados.`,
+        }
+      );
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setBulkSaving(false);
+    }
   }
 
   function goToPage(next: number) {
@@ -177,28 +373,37 @@ export function ExerciseCatalog() {
     : 'Carregando exercícios…';
 
   return (
-    <div className="pb-12">
-      <section className="from-primary/10 via-background to-background border-b bg-gradient-to-b">
+    <div className="bg-muted/20 min-h-screen pb-12">
+      <section className="from-primary/10 via-background to-background border-b bg-gradient-to-br">
         <div className="container mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
           <div className="flex items-center gap-4">
             <span className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-2xl shadow-sm">
               <Dumbbell className="size-6" />
             </span>
-            <div>
+            <div className="max-w-3xl">
+              <p className="text-primary mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-widest uppercase">
+                <Sparkles className="size-3.5" /> Seu repertório de treino
+              </p>
               <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
                 Catálogo de exercícios
               </h1>
               <p className="text-muted-foreground mt-1 text-sm md:text-base">
-                Encontre o exercício certo e veja como executá-lo, passo a
-                passo.
+                Explore os movimentos e escolha o que a IA pode usar nos seus
+                treinos.
+              </p>
+              <p className="text-muted-foreground mt-2 text-sm">
+                Suas escolhas são pessoais e salvas automaticamente. Todos
+                começam habilitados; desativar não altera treinos salvos nem
+                impede a inclusão manual.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="bg-background/90 sticky top-16 z-30 border-b backdrop-blur">
-        <div className="container mx-auto max-w-7xl space-y-3 px-4 py-3 md:px-6">
+      <fieldset disabled={bulkSaving} className="bg-background border-b">
+        <legend className="sr-only">Busca e grupo muscular</legend>
+        <div className="container mx-auto max-w-7xl space-y-4 px-4 py-5 md:px-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <div className="relative flex-1">
               <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
@@ -222,20 +427,6 @@ export function ExerciseCatalog() {
             </div>
 
             <div className="flex items-center gap-3">
-              <select
-                value={equipment}
-                onChange={(event) => changeEquipment(event.target.value)}
-                aria-label="Equipamento"
-                className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-11 min-w-0 flex-1 rounded-xl border px-3 text-sm outline-none focus-visible:ring-[3px] md:w-52 md:flex-none"
-              >
-                <option value="">Todos os equipamentos</option>
-                {(filters?.equipment ?? []).map((value) => (
-                  <option key={value} value={value}>
-                    {equipmentLabel(value)}
-                  </option>
-                ))}
-              </select>
-
               <div
                 role="group"
                 aria-label="Idioma do conteúdo"
@@ -293,13 +484,81 @@ export function ExerciseCatalog() {
             ))}
           </div>
         </div>
-      </div>
+      </fieldset>
 
       <div
         ref={resultsTop}
-        className="container mx-auto max-w-7xl scroll-mt-52 px-4 pt-6 md:px-6"
+        className="container mx-auto max-w-7xl scroll-mt-24 px-4 pt-6 md:px-6"
       >
-        <div className="mb-4 flex min-h-8 items-center justify-between gap-3">
+        <details open className="bg-card mb-5 rounded-2xl border shadow-sm">
+          <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-center gap-2 rounded-2xl p-4 text-sm font-semibold outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
+            <SlidersHorizontal className="text-primary size-4" />
+            Refinar catálogo
+            {activeFilters.length > 0 && (
+              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-xs">
+                {activeFilters.length} ativo(s)
+              </span>
+            )}
+            <ChevronRight className="text-muted-foreground ml-auto size-4 in-open:rotate-90" />
+          </summary>
+          <fieldset
+            disabled={bulkSaving}
+            className="grid grid-cols-2 gap-3 border-t p-4 lg:grid-cols-3 xl:grid-cols-6"
+          >
+            <legend className="sr-only">Filtros do catálogo</legend>
+            {filterControls.map((filter) => (
+              <label key={filter.key} className="flex min-w-0 flex-col gap-2">
+                <span className="text-muted-foreground text-xs font-medium">
+                  {filter.label}
+                </span>
+                <select
+                  value={filter.value}
+                  onChange={(event) => {
+                    filter.set(event.target.value);
+                    setPage(1);
+                  }}
+                  className={cn(
+                    'border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-10 w-full min-w-0 rounded-lg border px-2 text-sm outline-none focus-visible:ring-[3px]',
+                    filter.value && 'border-primary/40 bg-primary/5'
+                  )}
+                >
+                  <option value="">Todos</option>
+                  {filter.options.map((value) => (
+                    <option key={value} value={value}>
+                      {filter.format(value)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </fieldset>
+        </details>
+
+        {activeFilters.length > 0 && (
+          <div
+            className="mb-5 flex flex-wrap items-center gap-2"
+            aria-label="Filtros ativos"
+          >
+            {activeFilters.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                disabled={bulkSaving}
+                onClick={() => {
+                  filter.clear();
+                  setPage(1);
+                }}
+                aria-label={`Remover filtro ${filter.label}`}
+                className="bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50"
+              >
+                <span className="truncate">{filter.label}</span>
+                <X className="size-3 shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="mb-5 flex min-h-8 flex-wrap items-center justify-between gap-3">
           <p className="text-muted-foreground text-sm" aria-live="polite">
             <span className="text-foreground font-semibold">{totalLabel}</span>
             {query && listData ? ` para “${query}”` : ''}
@@ -308,12 +567,67 @@ export function ExerciseCatalog() {
             <button
               type="button"
               onClick={clearFilters}
+              disabled={bulkSaving}
               className="text-primary inline-flex items-center gap-1 text-sm font-medium hover:underline"
             >
               <X className="size-3.5" /> Limpar filtros
             </button>
           )}
         </div>
+
+        {canChoose && (
+          <section
+            aria-label="Seleção em lote para IA"
+            className="bg-card mb-6 flex flex-col gap-4 rounded-2xl border p-4 shadow-sm md:flex-row md:items-center md:justify-between"
+          >
+            <div className="flex items-start gap-3">
+              <span className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-xl">
+                {bulkSaving ? (
+                  <Loader2 className="size-5 animate-spin" />
+                ) : (
+                  <CheckCheck className="size-5" />
+                )}
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold">Sua seleção para a IA</h2>
+                <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                  Aplique aos {listData?.total.toLocaleString('pt-BR') ?? '…'}{' '}
+                  resultados dos filtros, em todas as páginas.
+                </p>
+              </div>
+            </div>
+            <div className="grid shrink-0 grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                disabled={bulkDisabled}
+                onClick={() =>
+                  setPendingBulk({
+                    enabled: true,
+                    params: filterParams,
+                    total: listData?.total ?? 0,
+                    labels: activeFilters.map((filter) => filter.label),
+                  })
+                }
+              >
+                <CheckCheck className="size-4" /> Habilitar todos
+              </Button>
+              <Button
+                variant="outline"
+                disabled={bulkDisabled}
+                onClick={() =>
+                  setPendingBulk({
+                    enabled: false,
+                    params: filterParams,
+                    total: listData?.total ?? 0,
+                    labels: activeFilters.map((filter) => filter.label),
+                  })
+                }
+              >
+                <XCircle className="size-4" /> Desabilitar todos
+              </Button>
+            </div>
+          </section>
+        )}
 
         {listError ? (
           <div
@@ -361,11 +675,42 @@ export function ExerciseCatalog() {
             )}
           >
             {items.map((exercise) => (
-              <ExerciseCard
-                key={exercise.id}
-                exercise={exercise}
-                onSelect={setSelectedId}
-              />
+              <div key={exercise.id} className="flex flex-col gap-2">
+                <ExerciseCard exercise={exercise} onSelect={setSelectedId} />
+                {canChoose && (
+                  <label
+                    className={cn(
+                      'flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition-colors',
+                      exercise.enabled_for_ai
+                        ? 'border-primary/20 bg-primary/5 text-primary'
+                        : 'bg-card text-muted-foreground'
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={exercise.enabled_for_ai}
+                      disabled={
+                        savingIds.has(exercise.id) || listLoading || bulkSaving
+                      }
+                      className="accent-primary size-4 shrink-0"
+                      onChange={(event) =>
+                        changeAvailability(exercise.id, event.target.checked)
+                      }
+                    />
+                    {exercise.enabled_for_ai
+                      ? 'Habilitado para IA'
+                      : 'Desabilitado para IA'}
+                    <span className="sr-only">: {exercise.name}</span>
+                    {savingIds.has(exercise.id) && (
+                      <Loader2
+                        aria-label="Salvando"
+                        role="status"
+                        className="ml-auto size-3.5 animate-spin"
+                      />
+                    )}
+                  </label>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -377,7 +722,7 @@ export function ExerciseCatalog() {
           >
             <button
               type="button"
-              disabled={listData.page <= 1 || listLoading}
+              disabled={listData.page <= 1 || listLoading || bulkSaving}
               onClick={() => goToPage(listData.page - 1)}
               className="hover:bg-accent inline-flex h-10 items-center gap-1 rounded-lg border px-4 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40"
             >
@@ -392,7 +737,11 @@ export function ExerciseCatalog() {
             </span>
             <button
               type="button"
-              disabled={listData.page >= listData.total_pages || listLoading}
+              disabled={
+                listData.page >= listData.total_pages ||
+                listLoading ||
+                bulkSaving
+              }
               onClick={() => goToPage(listData.page + 1)}
               className="hover:bg-accent inline-flex h-10 items-center gap-1 rounded-lg border px-4 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40"
             >
@@ -401,6 +750,69 @@ export function ExerciseCatalog() {
           </nav>
         )}
       </div>
+
+      <Dialog
+        open={pendingBulk !== null}
+        onOpenChange={(open) => {
+          if (!open && !bulkSaving) setPendingBulk(null);
+        }}
+      >
+        <DialogContent className="max-w-lg p-6">
+          <span className="bg-primary/10 text-primary mb-4 flex size-12 items-center justify-center rounded-2xl">
+            <Sparkles className="size-6" />
+          </span>
+          <DialogTitle className="pr-6">
+            {pendingBulk?.enabled ? 'Habilitar' : 'Desabilitar'} todos os
+            resultados?
+          </DialogTitle>
+          <DialogDescription className="mt-3 leading-relaxed">
+            A ação será aplicada a todos os exercícios que correspondem aos
+            filtros no momento da confirmação, não apenas aos desta página. A
+            consulta atual encontrou{' '}
+            <strong>
+              {pendingBulk?.total.toLocaleString('pt-BR')} exercícios
+            </strong>
+            .
+          </DialogDescription>
+          <div className="bg-muted/50 my-4 flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-xl p-3 text-xs">
+            {pendingBulk?.labels.length ? (
+              pendingBulk.labels.map((label) => (
+                <span
+                  key={label}
+                  className="bg-background rounded-md border px-2 py-1"
+                >
+                  {label}
+                </span>
+              ))
+            ) : (
+              <span className="text-muted-foreground">
+                Sem filtros: todo o seu catálogo acessível.
+              </span>
+            )}
+          </div>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            A escolha afeta somente sua disponibilidade para próximos treinos
+            com IA. Exercícios e treinos existentes serão preservados.
+          </p>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={bulkSaving}
+              onClick={() => setPendingBulk(null)}
+            >
+              Cancelar
+            </Button>
+            <Button disabled={bulkSaving} onClick={changeFilteredAvailability}>
+              {bulkSaving && <Loader2 className="size-4 animate-spin" />}
+              {bulkSaving
+                ? 'Salvando…'
+                : pendingBulk?.enabled
+                  ? 'Confirmar habilitação'
+                  : 'Confirmar desabilitação'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ExerciseDetailDialog
         summary={selectedSummary}

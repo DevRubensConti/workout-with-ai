@@ -19,6 +19,10 @@ from src.workouts.models import (
 )
 from src.workouts.plan_service import localized_name
 from src.workouts.session_schemas import (
+    ConsistencyAchievement,
+    ConsistencyProgress,
+    ExerciseProgress,
+    ExerciseProgressPoint,
     SessionDetail,
     SessionExerciseOut,
     SessionFinishIn,
@@ -31,6 +35,116 @@ from src.workouts.session_schemas import (
 
 SNAPSHOT_LOCALE = "pt-BR"
 PREVIOUS_LOOKUP_LIMIT = 2000
+
+
+def exercise_progress(
+    db: Session, user_id: UUID, exercise_id: UUID, page: int, page_size: int
+) -> ExerciseProgress:
+    conditions = (
+        WorkoutSession.user_id == user_id,
+        WorkoutSession.finished_at.is_not(None),
+        WorkoutSetLog.exercise_id == exercise_id,
+        WorkoutSetLog.completed.is_(True),
+        WorkoutSetLog.reps > 0,
+    )
+    grouped = (
+        select(
+            WorkoutSession.id.label("session_id"),
+            WorkoutSession.started_at.label("performed_at"),
+            func.max(WorkoutSetLog.weight_kg).label("max_weight"),
+        )
+        .join(WorkoutSetLog, WorkoutSetLog.session_id == WorkoutSession.id)
+        .where(*conditions)
+        .group_by(WorkoutSession.id, WorkoutSession.started_at)
+    )
+    total = db.scalar(select(func.count()).select_from(grouped.subquery())) or 0
+    record = db.execute(
+        grouped.having(func.max(WorkoutSetLog.weight_kg).is_not(None))
+        .order_by(
+            func.max(WorkoutSetLog.weight_kg).desc(), WorkoutSession.started_at, WorkoutSession.id
+        )
+        .limit(1)
+    ).first()
+    entries = db.execute(
+        grouped.order_by(WorkoutSession.started_at.desc(), WorkoutSession.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    logs_by_session: dict[UUID, list[SetLogOut]] = {entry.session_id: [] for entry in entries}
+    if entries:
+        logs = db.scalars(
+            select(WorkoutSetLog)
+            .join(WorkoutSession, WorkoutSetLog.session_id == WorkoutSession.id)
+            .where(*conditions, WorkoutSession.id.in_(logs_by_session))
+            .order_by(WorkoutSetLog.set_number)
+        ).all()
+        for log in logs:
+            logs_by_session[log.session_id].append(
+                SetLogOut(
+                    exercise_id=exercise_id,
+                    set_number=log.set_number,
+                    reps=log.reps,
+                    weight_kg=float(log.weight_kg) if log.weight_kg is not None else None,
+                    completed=True,
+                )
+            )
+    return ExerciseProgress(
+        exercise_id=exercise_id,
+        personal_record_kg=float(record.max_weight) if record else None,
+        personal_record_at=record.performed_at if record else None,
+        completed_sessions=total,
+        page=page,
+        total_pages=(total + page_size - 1) // page_size,
+        points=[
+            ExerciseProgressPoint(
+                session_id=entry.session_id,
+                performed_at=entry.performed_at,
+                max_weight_kg=float(entry.max_weight) if entry.max_weight is not None else None,
+                volume_kg=sum(
+                    (item.weight_kg or 0) * item.reps for item in logs_by_session[entry.session_id]
+                ),
+                sets=logs_by_session[entry.session_id],
+            )
+            for entry in entries
+        ],
+    )
+
+
+def consistency_progress(db: Session, user_id: UUID) -> ConsistencyProgress:
+    completed = (
+        select(WorkoutSetLog.id)
+        .where(
+            WorkoutSetLog.session_id == WorkoutSession.id,
+            WorkoutSetLog.completed.is_(True),
+            WorkoutSetLog.reps > 0,
+        )
+        .exists()
+    )
+    total = (
+        db.scalar(
+            select(func.count(WorkoutSession.id)).where(
+                WorkoutSession.user_id == user_id,
+                WorkoutSession.finished_at.is_not(None),
+                completed,
+            )
+        )
+        or 0
+    )
+    milestones = [
+        (1, "Primeiro passo"),
+        (5, "Criando rotina"),
+        (10, "Consistência"),
+        (25, "Dedicação"),
+        (50, "Hábito consolidado"),
+        (100, "Jornada de 100 treinos"),
+    ]
+    return ConsistencyProgress(
+        completed_sessions=total,
+        achievements=[
+            ConsistencyAchievement(sessions_required=count, label=label, unlocked=total >= count)
+            for count, label in milestones
+        ],
+    )
 
 
 class InvalidSessionError(ValueError):
@@ -96,9 +210,7 @@ def _previous_weights(
     return latest
 
 
-def start_session(
-    db: Session, user_id: UUID, day_id: UUID
-) -> tuple[WorkoutSession, bool] | None:
+def start_session(db: Session, user_id: UUID, day_id: UUID) -> tuple[WorkoutSession, bool] | None:
     """Inicia (ou retoma) o treino de um dia. Retorna (sessão, criada_agora)."""
     day = db.scalar(
         select(WorkoutDay)
@@ -151,9 +263,7 @@ def start_session(
     return workout, True
 
 
-def replace_sets(
-    db: Session, user_id: UUID, session_id: UUID, sets: list[SetLogIn]
-) -> bool:
+def replace_sets(db: Session, user_id: UUID, session_id: UUID, sets: list[SetLogIn]) -> bool:
     workout = _owned(db, user_id, session_id)
     if workout is None:
         return False
@@ -196,9 +306,7 @@ def replace_sets(
     return True
 
 
-def finish_session(
-    db: Session, user_id: UUID, session_id: UUID, data: SessionFinishIn
-) -> bool:
+def finish_session(db: Session, user_id: UUID, session_id: UUID, data: SessionFinishIn) -> bool:
     workout = _owned(db, user_id, session_id)
     if workout is None:
         return False
@@ -330,9 +438,7 @@ def get_open_session_detail(db: Session, user_id: UUID) -> SessionDetail | None:
     return _detail(db, workout) if workout else None
 
 
-def list_sessions(
-    db: Session, user_id: UUID, page: int, page_size: int
-) -> SessionListResponse:
+def list_sessions(db: Session, user_id: UUID, page: int, page_size: int) -> SessionListResponse:
     finished = (WorkoutSession.user_id == user_id, WorkoutSession.finished_at.is_not(None))
     total = db.scalar(select(func.count(WorkoutSession.id)).where(*finished)) or 0
     rows = db.scalars(

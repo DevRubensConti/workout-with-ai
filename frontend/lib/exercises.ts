@@ -9,6 +9,7 @@ export interface ExerciseSummary {
   level: string | null;
   locale: ExerciseLocale | null;
   images: string[];
+  enabled_for_ai: boolean;
 }
 
 export interface ExerciseDetail extends ExerciseSummary {
@@ -24,6 +25,10 @@ export interface ExerciseDetail extends ExerciseSummary {
 export interface ExerciseFilters {
   muscle_groups: string[];
   equipment: string[];
+  levels: string[];
+  categories: string[];
+  mechanics: string[];
+  forces: string[];
 }
 
 export interface ExerciseCatalogResponse {

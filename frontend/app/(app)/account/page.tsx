@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 
 import { ChangePasswordForm } from '@/components/auth/change-password-form';
+import { TrainingProfileForm } from '@/components/auth/training-profile-form';
+import { WorkoutPreferencesForm } from '@/components/auth/workout-preferences-form';
 import {
   Card,
   CardContent,
@@ -35,6 +37,8 @@ export default async function AccountPage() {
         </CardContent>
       </Card>
 
+      <TrainingProfileForm />
+      <WorkoutPreferencesForm />
       <ChangePasswordForm />
     </div>
   );

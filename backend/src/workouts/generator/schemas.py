@@ -1,7 +1,8 @@
+from datetime import datetime
 from typing import Annotated, Literal, get_args
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.workouts.generator.rules import MUSCLE_LABELS
 from src.workouts.generator.splits import SplitStyle, styles_for
@@ -83,6 +84,7 @@ class GeneratedExercise(BaseModel):
     reps_min: int
     reps_max: int
     rest_seconds: int
+    notes: str | None = None
 
 
 class GeneratedDay(BaseModel):
@@ -117,6 +119,26 @@ class GeneratedPlan(BaseModel):
     references: list[ReferenceOut]
     rules_version: str
     review_status: str
+    generator: Literal["rules", "gemini"] = "rules"
+    model: str | None = None
+    prompt_version: str | None = None
+    consent_version: str | None = None
+    consented_at: datetime | None = None
+    profile_updated_at: datetime | None = None
+
+
+class AiGenerateIn(GenerateIn):
+    ai_consent: Literal[True]
+    consent_version: Literal["gemini-training-v1"]
+    preferences: str = Field(default="", max_length=1000)
+    complaint_details: str = Field(default="", max_length=1000)
+
+    @field_validator("ai_consent", mode="before")
+    @classmethod
+    def explicit_consent_only(cls, value):
+        if value is not True:
+            raise ValueError("É necessário consentimento explícito para enviar dados ao Gemini.")
+        return value
 
 
 assert set(MUSCLE_LABELS) == set(get_args(TrainableMuscle))

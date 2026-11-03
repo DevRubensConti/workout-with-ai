@@ -18,6 +18,10 @@ interface GenerationPanelProps {
 // Explica de onde vêm as escolhas do treino: metas, fundamentos e fontes.
 export function GenerationPanel({ info, mode }: GenerationPanelProps) {
   const draft = mode === 'draft';
+  const origin =
+    info.generator === 'gemini'
+      ? `Personalizado pelo Google Gemini${info.model ? ` (${info.model})` : ''}, usando as referências do gerador.`
+      : 'Gerado por regras baseadas em evidências.';
 
   return (
     <Card className="border-primary/30">
@@ -29,9 +33,9 @@ export function GenerationPanel({ info, mode }: GenerationPanelProps) {
             : 'Como este treino foi montado'}
         </CardTitle>
         <CardDescription>
-          {draft
-            ? 'Gerado por regras baseadas em evidências. Você pode trocar, remover ou ajustar qualquer exercício abaixo.'
-            : 'Gerado por regras baseadas em evidências.'}
+          {origin}
+          {draft &&
+            ' Você pode trocar, remover ou ajustar qualquer exercício abaixo.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -65,27 +69,31 @@ export function GenerationPanel({ info, mode }: GenerationPanelProps) {
                     <div className="flex justify-between text-sm">
                       <span>{entry.label}</span>
                       <span className="text-muted-foreground tabular-nums">
-                        {entry.sets}/{entry.target}
+                        {entry.target > 0
+                          ? `${entry.sets}/${entry.target}`
+                          : `${entry.sets} · sem meta definida`}
                       </span>
                     </div>
-                    <div
-                      role="progressbar"
-                      aria-label={`${entry.label}: ${entry.sets} de ${entry.target} séries`}
-                      aria-valuemin={0}
-                      aria-valuemax={entry.target}
-                      aria-valuenow={entry.sets}
-                      className="bg-muted h-1.5 overflow-hidden rounded-full"
-                    >
+                    {entry.target > 0 && (
                       <div
-                        className={cn(
-                          'h-full',
-                          reached ? 'bg-primary' : 'bg-amber-500'
-                        )}
-                        style={{
-                          width: `${Math.min(100, (entry.sets / entry.target) * 100)}%`,
-                        }}
-                      />
-                    </div>
+                        role="progressbar"
+                        aria-label={`${entry.label}: ${entry.sets} de ${entry.target} séries`}
+                        aria-valuemin={0}
+                        aria-valuemax={entry.target}
+                        aria-valuenow={entry.sets}
+                        className="bg-muted h-1.5 overflow-hidden rounded-full"
+                      >
+                        <div
+                          className={cn(
+                            'h-full',
+                            reached ? 'bg-primary' : 'bg-amber-500'
+                          )}
+                          style={{
+                            width: `${Math.min(100, (entry.sets / entry.target) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </li>
                 );
               })}

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { ConsistencyProgress } from '@/components/sessions/consistency-progress';
 import { ApiError, apiFetch } from '@/lib/api';
 import {
   formatDateTime,
@@ -70,6 +71,8 @@ export function SessionHistory() {
           {data && data.total > 0 && ` ${data.total} no total.`}
         </p>
       </div>
+
+      <ConsistencyProgress />
 
       {error ? (
         <div

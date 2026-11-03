@@ -386,4 +386,34 @@ CREATE INDEX ix_muscle_targets_sort_order ON muscle_targets (sort_order, name_pt
 
 UPDATE alembic_version SET version_num='0008' WHERE version_num = '0007';
 
+-- Running upgrade 0008 -> 0009
+
+CREATE TABLE training_profiles (
+    user_id UUID NOT NULL PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+    age INTEGER NOT NULL,
+    weight_kg NUMERIC(5, 2) NOT NULL,
+    height_cm INTEGER NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_training_profiles_age CHECK (age BETWEEN 18 AND 100),
+    CONSTRAINT ck_training_profiles_weight CHECK (weight_kg BETWEEN 20 AND 400),
+    CONSTRAINT ck_training_profiles_height CHECK (height_cm BETWEEN 100 AND 250)
+);
+
+ALTER TABLE training_profiles ENABLE ROW LEVEL SECURITY;
+
+UPDATE alembic_version SET version_num='0009' WHERE version_num = '0008';
+
+-- Running upgrade 0009 -> 0010
+CREATE TABLE disabled_exercises (
+    user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    exercise_id UUID NOT NULL REFERENCES exercises (id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, exercise_id)
+);
+ALTER TABLE disabled_exercises ENABLE ROW LEVEL SECURITY;
+UPDATE alembic_version SET version_num='0010' WHERE version_num = '0009';
+
+-- Running upgrade 0010 -> 0011
+ALTER TABLE users ADD COLUMN rest_timer_enabled BOOLEAN DEFAULT false NOT NULL;
+UPDATE alembic_version SET version_num='0011' WHERE version_num = '0010';
+
 COMMIT;

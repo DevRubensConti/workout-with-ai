@@ -11,6 +11,8 @@ wheels/
 
 # Secrets / local config
 .env
+.env*
+!.env.example
 
 # Tooling caches
 .pytest_cache

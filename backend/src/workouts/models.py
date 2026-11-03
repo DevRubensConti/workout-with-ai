@@ -112,6 +112,19 @@ class Exercise(TimestampMixin, Base):
     )
 
 
+class DisabledExercise(Base):
+    """Ausência de registro significa habilitado para a IA."""
+
+    __tablename__ = "disabled_exercises"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    exercise_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("exercises.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
 class MuscleTarget(TimestampMixin, Base):
     """Hierarchical catalog of muscle groups, muscles, and anatomical regions."""
 

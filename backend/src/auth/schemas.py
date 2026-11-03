@@ -1,8 +1,9 @@
 """Schemas Pydantic de entrada/saída do módulo de autenticação."""
 
+from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, StrictBool
 
 
 class RegisterRequest(BaseModel):
@@ -52,3 +53,23 @@ class UserResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class WorkoutPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rest_timer_enabled: StrictBool
+
+
+class TrainingProfileIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    age: int = Field(strict=True, ge=18, le=100)
+    weight_kg: float = Field(ge=20, le=400, allow_inf_nan=False)
+    height_cm: int = Field(strict=True, ge=100, le=250)
+
+
+class TrainingProfileOut(TrainingProfileIn):
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    updated_at: datetime

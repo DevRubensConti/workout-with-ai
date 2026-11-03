@@ -1,11 +1,20 @@
 'use client';
 
-import { Check, Plus, Timer, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Timer,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ExerciseImage } from '@/components/exercises/exercise-image';
+import { ExerciseProgress } from '@/components/sessions/exercise-progress';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -72,6 +81,39 @@ export function SessionRunner({
   const [effort, setEffort] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState<'finish' | 'cancel' | null>(null);
+  const [exerciseIndex, setExerciseIndex] = useState(() => {
+    const first = initialRows.findIndex((exercise) =>
+      exercise.sets.some((set) => !set.completed)
+    );
+    return Math.max(0, first);
+  });
+  const [restEnabled, setRestEnabled] = useState<boolean | null>(null);
+  const [preferenceError, setPreferenceError] = useState('');
+  const [preferenceRetry, setPreferenceRetry] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    apiFetch<{ rest_timer_enabled: boolean }>('/auth/workout-preferences', {
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setRestEnabled(data.rest_timer_enabled);
+          setPreferenceError('');
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          setPreferenceError(
+            errorMessage(
+              error,
+              'Não foi possível carregar a preferência de timer.'
+            )
+          );
+      });
+    return () => controller.abort();
+  }, [preferenceRetry]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -94,8 +136,9 @@ export function SessionRunner({
         });
         setSaveState(editCount.current === seen ? 'saved' : 'pending');
         return true;
-      } catch {
+      } catch (error) {
         setSaveState('error');
+        toast.error(errorMessage(error, 'Não foi possível salvar as séries.'));
         return false;
       }
     });
@@ -132,9 +175,21 @@ export function SessionRunner({
 
   function toggleSet(exercise: ExerciseRows, set: SetRow) {
     const completed = !set.completed;
+    if (
+      completed &&
+      (parseWeight(set.weight) === undefined ||
+        parseReps(set.reps) === null ||
+        parseReps(set.reps) === 0)
+    ) {
+      toast.error(
+        'Informe uma carga válida e ao menos uma repetição antes de concluir a série.'
+      );
+      return;
+    }
     patchSet(exercise.exerciseId, set.key, { completed });
     const rest = exercise.target?.rest_seconds;
-    if (completed && rest) setRestEnd(now + rest * 1000);
+    if (completed && rest && restEnabled) setRestEnd(now + rest * 1000);
+    if (!completed) setRestEnd(null);
   }
 
   function addSet(exerciseId: string) {
@@ -178,7 +233,9 @@ export function SessionRunner({
       timer.current = null;
     }
     if (!(await persist())) {
-      toast.error('Corrija os valores inválidos antes de finalizar.');
+      toast.error(
+        'Não foi possível salvar as séries. Verifique os valores e tente novamente.'
+      );
       setBusy(null);
       return;
     }
@@ -205,6 +262,7 @@ export function SessionRunner({
       timer.current = null;
     }
     try {
+      await chain.current;
       await apiFetch(`/sessions/${session.id}`, { method: 'DELETE' });
       toast.success('Treino cancelado.');
       onCancelled();
@@ -222,6 +280,22 @@ export function SessionRunner({
   );
   const elapsed = (now - parseApiDate(session.started_at).getTime()) / 1000;
   const restLeft = restEnd !== null ? Math.ceil((restEnd - now) / 1000) : null;
+  const activeExercise = rows[exerciseIndex];
+  const currentWeights =
+    activeExercise?.sets
+      .filter((set) => set.completed && (parseReps(set.reps) ?? 0) > 0)
+      .map((set) => parseWeight(set.weight))
+      .filter((weight): weight is number => typeof weight === 'number') ?? [];
+
+  async function navigateExercise(next: number) {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (!(await persist())) return;
+    setExerciseIndex(next);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   return (
     <div className="pb-28">
@@ -278,134 +352,254 @@ export function SessionRunner({
       </div>
 
       <div className="container mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6">
-        {rows.map((exercise) => (
-          <section
-            key={exercise.exerciseId}
-            aria-label={exercise.name}
-            className="bg-card rounded-xl border p-4 shadow-sm"
+        <section
+          aria-label="Temporizador"
+          className="from-primary/10 to-card rounded-3xl border bg-gradient-to-br p-6 text-center shadow-sm"
+        >
+          <p className="text-muted-foreground flex items-center justify-center gap-2 text-sm">
+            <Timer className="size-4" />{' '}
+            {restEnabled && restLeft !== null
+              ? 'Descanso entre séries'
+              : 'Tempo de treino'}
+          </p>
+          <p
+            role="timer"
+            aria-label={
+              restEnabled && restLeft !== null
+                ? 'Tempo restante de descanso'
+                : 'Tempo total de treino'
+            }
+            className="text-primary my-3 font-mono text-6xl font-bold tabular-nums sm:text-7xl"
           >
-            <div className="flex items-start gap-3">
-              <span className="bg-muted relative h-14 w-20 shrink-0 overflow-hidden rounded-lg">
-                <ExerciseImage
-                  key={exercise.images[0] ?? 'empty'}
-                  path={exercise.images[0]}
-                  alt=""
-                  sizes="80px"
-                />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h3 className="leading-snug font-semibold">{exercise.name}</h3>
-                <p className="text-muted-foreground text-sm">
-                  {exercise.muscleGroup
-                    ? muscleLabel(exercise.muscleGroup)
-                    : ''}
-                </p>
-                {exercise.target && (
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    Meta: {exercise.target.sets} ×{' '}
-                    {formatReps(
-                      exercise.target.reps_min,
-                      exercise.target.reps_max
-                    )}
-                    {exercise.target.target_weight_kg !== null &&
-                      ` · ${formatWeight(exercise.target.target_weight_kg)}`}
-                    {exercise.target.rest_seconds !== null &&
-                      ` · descanso ${formatRest(exercise.target.rest_seconds)}`}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {exercise.target?.notes && (
-              <p className="text-muted-foreground mt-2 text-xs italic">
-                {exercise.target.notes}
-              </p>
+            {formatClock(
+              restEnabled && restLeft !== null ? Math.max(0, restLeft) : elapsed
             )}
-
-            <div className="mt-4 space-y-2">
-              <div className="text-muted-foreground grid grid-cols-[2rem_1fr_1fr_2.5rem_1.75rem] items-center gap-2 px-1 text-xs font-medium">
-                <span>Série</span>
-                <span>Carga (kg)</span>
-                <span>Reps</span>
-                <span className="sr-only">Concluir</span>
-                <span className="sr-only">Remover</span>
+          </p>
+          {restEnabled && restLeft !== null && (
+            <>
+              <p className="text-muted-foreground text-sm">
+                Tempo de treino: {formatClock(elapsed)}
+              </p>
+              <p role="status" className="mt-2 font-medium">
+                {restLeft <= 0
+                  ? 'Descanso concluído. Retome quando estiver pronto.'
+                  : 'Recupere-se antes da próxima série.'}
+              </p>
+              <Button
+                variant="outline"
+                className="mt-3"
+                onClick={() => setRestEnd(null)}
+              >
+                {restLeft > 0 ? 'Encerrar descanso' : 'Fechar descanso'}
+              </Button>
+            </>
+          )}
+          {preferenceError ? (
+            <div role="alert">
+              <p className="text-destructive text-sm">{preferenceError}</p>
+              <Button
+                variant="outline"
+                onClick={() => setPreferenceRetry((value) => value + 1)}
+              >
+                Recarregar preferência
+              </Button>
+            </div>
+          ) : restEnabled === null ? (
+            <p role="status" className="text-muted-foreground text-xs">
+              Carregando preferência de descanso…
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              {restEnabled
+                ? 'Descanso inicia ao concluir cada série, conforme a prescrição.'
+                : 'Timer de descanso desativado em Minha conta.'}
+            </p>
+          )}
+        </section>
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            variant="outline"
+            disabled={exerciseIndex <= 0 || busy !== null}
+            onClick={() => void navigateExercise(exerciseIndex - 1)}
+          >
+            <ChevronLeft /> Anterior
+          </Button>
+          <label className="min-w-0 flex-1 text-center text-xs">
+            <span className="text-muted-foreground">
+              Exercício {rows.length ? exerciseIndex + 1 : 0} de {rows.length}
+            </span>
+            <select
+              aria-label="Exercício em execução"
+              className="bg-background mt-1 h-9 w-full truncate rounded-lg border px-2 text-sm"
+              value={exerciseIndex}
+              disabled={busy !== null}
+              onChange={(event) =>
+                void navigateExercise(Number(event.target.value))
+              }
+            >
+              {rows.map((exercise, index) => (
+                <option key={exercise.exerciseId} value={index}>
+                  {exercise.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            variant="outline"
+            disabled={exerciseIndex >= rows.length - 1 || busy !== null}
+            onClick={() => void navigateExercise(exerciseIndex + 1)}
+          >
+            Próximo <ChevronRight />
+          </Button>
+        </div>
+        <fieldset disabled={busy !== null}>
+          {rows.slice(exerciseIndex, exerciseIndex + 1).map((exercise) => (
+            <section
+              key={exercise.exerciseId}
+              aria-label={exercise.name}
+              className="bg-card rounded-xl border p-4 shadow-sm"
+            >
+              <div className="flex items-start gap-3">
+                <span className="bg-muted relative h-14 w-20 shrink-0 overflow-hidden rounded-lg">
+                  <ExerciseImage
+                    key={exercise.images[0] ?? 'empty'}
+                    path={exercise.images[0]}
+                    alt=""
+                    sizes="80px"
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-xl leading-snug font-semibold">
+                    {exercise.name}
+                  </h2>
+                  <p className="text-muted-foreground text-sm">
+                    {exercise.muscleGroup
+                      ? muscleLabel(exercise.muscleGroup)
+                      : ''}
+                  </p>
+                  {exercise.target && (
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Meta: {exercise.target.sets} ×{' '}
+                      {formatReps(
+                        exercise.target.reps_min,
+                        exercise.target.reps_max
+                      )}
+                      {exercise.target.target_weight_kg !== null &&
+                        ` · ${formatWeight(exercise.target.target_weight_kg)}`}
+                      {exercise.target.rest_seconds !== null &&
+                        ` · descanso ${formatRest(exercise.target.rest_seconds)}`}
+                    </p>
+                  )}
+                </div>
               </div>
-              {exercise.sets.map((set, index) => {
-                const weightInvalid = parseWeight(set.weight) === undefined;
-                const repsInvalid = parseReps(set.reps) === null;
-                return (
-                  <div
-                    key={set.key}
-                    className={cn(
-                      'grid grid-cols-[2rem_1fr_1fr_2.5rem_1.75rem] items-center gap-2 rounded-lg p-1 transition-colors',
-                      set.completed && 'bg-primary/10'
-                    )}
-                  >
-                    <span className="text-muted-foreground text-center text-sm font-medium tabular-nums">
-                      {index + 1}
-                    </span>
-                    <Input
-                      value={set.weight}
-                      inputMode="decimal"
-                      placeholder="—"
-                      aria-label={`Carga da série ${index + 1} de ${exercise.name}`}
-                      aria-invalid={weightInvalid}
-                      onChange={(event) =>
-                        patchSet(exercise.exerciseId, set.key, {
-                          weight: event.target.value,
-                        })
-                      }
-                      className="h-10 text-center"
-                    />
-                    <Input
-                      value={set.reps}
-                      inputMode="numeric"
-                      aria-label={`Repetições da série ${index + 1} de ${exercise.name}`}
-                      aria-invalid={repsInvalid}
-                      onChange={(event) =>
-                        patchSet(exercise.exerciseId, set.key, {
-                          reps: event.target.value,
-                        })
-                      }
-                      className="h-10 text-center"
-                    />
-                    <button
-                      type="button"
-                      aria-pressed={set.completed}
-                      aria-label={`${set.completed ? 'Desmarcar' : 'Concluir'} série ${index + 1} de ${exercise.name}`}
-                      onClick={() => toggleSet(exercise, set)}
+
+              {exercise.target?.notes && (
+                <p className="text-muted-foreground mt-2 text-xs italic">
+                  {exercise.target.notes}
+                </p>
+              )}
+
+              <div className="mt-4 space-y-2">
+                <div className="text-muted-foreground grid grid-cols-[2rem_1fr_1fr_2.5rem_1.75rem] items-center gap-2 px-1 text-xs font-medium">
+                  <span>Série</span>
+                  <span>Carga (kg)</span>
+                  <span>Reps</span>
+                  <span className="sr-only">Concluir</span>
+                  <span className="sr-only">Remover</span>
+                </div>
+                {exercise.sets.map((set, index) => {
+                  const weightInvalid = parseWeight(set.weight) === undefined;
+                  const repsInvalid = parseReps(set.reps) === null;
+                  return (
+                    <div
+                      key={set.key}
                       className={cn(
-                        'flex size-10 items-center justify-center rounded-lg border transition-colors',
-                        set.completed
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'text-muted-foreground hover:border-primary hover:text-primary'
+                        'grid grid-cols-[2rem_1fr_1fr_2.5rem_1.75rem] items-center gap-2 rounded-lg p-1 transition-colors',
+                        set.completed && 'bg-primary/10'
                       )}
                     >
-                      <Check className="size-5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Remover série ${index + 1} de ${exercise.name}`}
-                      onClick={() => removeSet(exercise.exerciseId, set.key)}
-                      className="text-muted-foreground hover:text-destructive flex size-7 items-center justify-center rounded-md"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                      <span className="text-muted-foreground text-center text-sm font-medium tabular-nums">
+                        {index + 1}
+                      </span>
+                      <Input
+                        value={set.weight}
+                        inputMode="decimal"
+                        placeholder="—"
+                        aria-label={`Carga da série ${index + 1} de ${exercise.name}`}
+                        aria-invalid={weightInvalid}
+                        onChange={(event) =>
+                          patchSet(exercise.exerciseId, set.key, {
+                            weight: event.target.value,
+                          })
+                        }
+                        className="h-12 text-center text-lg"
+                      />
+                      <Input
+                        value={set.reps}
+                        inputMode="numeric"
+                        aria-label={`Repetições da série ${index + 1} de ${exercise.name}`}
+                        aria-invalid={repsInvalid}
+                        onChange={(event) =>
+                          patchSet(exercise.exerciseId, set.key, {
+                            reps: event.target.value,
+                          })
+                        }
+                        className="h-12 text-center text-lg"
+                      />
+                      <button
+                        type="button"
+                        aria-pressed={set.completed}
+                        aria-label={`${set.completed ? 'Desmarcar' : 'Concluir'} série ${index + 1} de ${exercise.name}`}
+                        onClick={() => toggleSet(exercise, set)}
+                        disabled={restEnabled === null}
+                        className={cn(
+                          'flex size-10 items-center justify-center rounded-lg border transition-colors',
+                          set.completed
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'text-muted-foreground hover:border-primary hover:text-primary'
+                        )}
+                      >
+                        <Check className="size-5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Remover série ${index + 1} de ${exercise.name}`}
+                        onClick={() => removeSet(exercise.exerciseId, set.key)}
+                        className="text-muted-foreground hover:text-destructive flex size-7 items-center justify-center rounded-md"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2"
-              onClick={() => addSet(exercise.exerciseId)}
-            >
-              <Plus /> Adicionar série
-            </Button>
-          </section>
-        ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2"
+                onClick={() => addSet(exercise.exerciseId)}
+                disabled={exercise.sets.length >= 100 || total >= 500}
+              >
+                <Plus /> Adicionar série
+              </Button>
+            </section>
+          ))}
+        </fieldset>
+        {activeExercise && (
+          <ExerciseProgress
+            key={activeExercise.exerciseId}
+            exerciseId={activeExercise.exerciseId}
+            currentWeightKg={
+              currentWeights.length ? Math.max(...currentWeights) : null
+            }
+          />
+        )}
+        {saveState === 'error' && (
+          <Button variant="outline" onClick={() => void persist()}>
+            Tentar salvar novamente
+          </Button>
+        )}
 
         <div className="flex flex-wrap justify-between gap-3 pt-2">
           <Button
@@ -425,34 +619,6 @@ export function SessionRunner({
           </Button>
         </div>
       </div>
-
-      {restLeft !== null && (
-        <div
-          role="status"
-          className="bg-card fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit items-center gap-3 rounded-full border px-5 py-3 shadow-lg"
-        >
-          <Timer className="text-primary size-5" />
-          <span className="text-sm font-medium">
-            {restLeft > 0 ? (
-              <>
-                Descanso{' '}
-                <span className="font-mono tabular-nums">
-                  {formatClock(restLeft)}
-                </span>
-              </>
-            ) : (
-              'Hora da próxima série!'
-            )}
-          </span>
-          <button
-            type="button"
-            onClick={() => setRestEnd(null)}
-            className="text-muted-foreground hover:text-foreground text-sm"
-          >
-            {restLeft > 0 ? 'Pular' : 'Fechar'}
-          </button>
-        </div>
-      )}
 
       <Dialog
         open={finishOpen}

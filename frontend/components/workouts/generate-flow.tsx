@@ -2,11 +2,12 @@
 
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { WorkoutBuilder } from '@/components/workouts/workout-builder';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { ApiError, apiFetch } from '@/lib/api';
 import { muscleLabel } from '@/lib/exercises';
 import {
@@ -27,6 +28,7 @@ import {
 } from '@/lib/generator';
 import type { Draft } from '@/lib/workouts';
 import { cn } from '@/lib/utils';
+import type { TrainingProfile } from '@/lib/training-profile';
 
 interface Generated {
   draft: Draft;
@@ -126,6 +128,35 @@ export function GenerateFlow() {
   const [generated, setGenerated] = useState<Generated | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<TrainingProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileAttempt, setProfileAttempt] = useState(0);
+  const [consent, setConsent] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    apiFetch<TrainingProfile | null>('/auth/training-profile', {
+      signal: controller.signal,
+    })
+      .then((data) => {
+        setProfile(data);
+        setProfileError(null);
+      })
+      .catch((caught: unknown) => {
+        if (!controller.signal.aborted) {
+          setProfileError(
+            caught instanceof ApiError
+              ? caught.message
+              : 'Falha ao carregar o perfil.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setProfileLoading(false);
+      });
+    return () => controller.abort();
+  }, [profileAttempt]);
 
   function patch(change: Partial<GenerateInput>) {
     setInput((current) => ({ ...current, ...change }));
@@ -150,9 +181,13 @@ export function GenerateFlow() {
     setGenerating(true);
     setError(null);
     try {
-      const plan = await apiFetch<GeneratedPlan>('/workouts/generate', {
+      const plan = await apiFetch<GeneratedPlan>('/workouts/generate-ai', {
         method: 'POST',
-        body: input,
+        body: {
+          ...input,
+          ai_consent: consent,
+          consent_version: 'gemini-training-v1',
+        },
       });
       setGenerated({ draft: draftFromGenerated(plan), plan, input });
       window.scrollTo({ top: 0 });
@@ -165,6 +200,7 @@ export function GenerateFlow() {
       toast.error(message);
     } finally {
       setGenerating(false);
+      setConsent(false);
     }
   }
 
@@ -175,6 +211,12 @@ export function GenerateFlow() {
         initialDraft={generated.draft}
         generation={{
           info: {
+            generator: plan.generator,
+            model: plan.model,
+            prompt_version: plan.prompt_version,
+            consent_version: plan.consent_version,
+            consented_at: plan.consented_at,
+            profile_updated_at: plan.profile_updated_at,
             rules_version: plan.rules_version,
             review_status: plan.review_status,
             split: plan.split,
@@ -203,10 +245,54 @@ export function GenerateFlow() {
           <Sparkles className="text-primary size-6" /> Gerar treino
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Responda algumas perguntas e montamos um treino com base em evidências
-          científicas. Você revisa e ajusta antes de salvar.
+          O Gemini adapta um plano-base usando suas respostas, seu perfil e as
+          mesmas referências científicas do gerador. Você revisa o treino final
+          antes de salvar.
         </p>
       </div>
+
+      <Section title="Seu perfil de treino">
+        {profileLoading ? (
+          <p role="status">Carregando perfil...</p>
+        ) : profileError ? (
+          <p role="alert">{profileError}</p>
+        ) : profile ? (
+          <p className="text-sm">
+            {profile.age} anos · {profile.weight_kg} kg · {profile.height_cm}{' '}
+            cm. Confira se estes dados ainda estão atualizados.
+          </p>
+        ) : (
+          <p>Preencha idade, peso e altura em Minha conta para gerar por IA.</p>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/account" className="text-primary underline">
+            Editar perfil em Minha conta
+          </Link>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={generating}
+            onClick={() => {
+              setConsent(false);
+              setProfileAttempt((value) => value + 1);
+            }}
+          >
+            Recarregar perfil
+          </Button>
+        </div>
+      </Section>
+
+      <Section title="Exercícios disponíveis para a IA">
+        <p className="text-muted-foreground text-sm">
+          O Gemini recebe todos os exercícios que você deixou habilitados no
+          catálogo, inclusive os de outros níveis. Cabe à IA considerar sua
+          experiência e preferências. Exercícios desabilitados não são enviados
+          nem aceitos na resposta.
+        </p>
+        <Link href="/exercises" className="text-primary underline">
+          Escolher exercícios habilitados
+        </Link>
+      </Section>
 
       <Section title="Qual é o seu objetivo?">
         <div
@@ -354,7 +440,7 @@ export function GenerateFlow() {
 
       <Section
         title="Alguma dor ou área a proteger? (opcional)"
-        hint={`Escolha até ${MAX_AVOID}. As queixas ficam registradas para futura avaliação por IA. O gerador atual não adapta nem exclui exercícios por elas; revise o treino com um profissional.`}
+        hint={`Escolha até ${MAX_AVOID}. A IA considera essas queixas para adaptar o treino, sem uma regra fixa de excluir músculos. Não substitui avaliação profissional.`}
       >
         <div
           role="group"
@@ -376,6 +462,72 @@ export function GenerateFlow() {
         </div>
       </Section>
 
+      <Section
+        title="Detalhes das queixas (opcional)"
+        hint="Descreva limitações relevantes e orientações profissionais já recebidas. Não inclua nome, telefone ou outros dados de identificação."
+      >
+        <Label htmlFor="complaint-details" className="sr-only">
+          Detalhes das queixas
+        </Label>
+        <textarea
+          id="complaint-details"
+          maxLength={1000}
+          rows={3}
+          value={input.complaint_details}
+          onChange={(event) => patch({ complaint_details: event.target.value })}
+          className="bg-background w-full rounded-md border p-3 text-sm"
+        />
+      </Section>
+
+      <Section
+        title="Preferências e contexto (opcional)"
+        hint="Informe equipamentos disponíveis, exercícios preferidos ou que não gosta e outras informações úteis para o treino."
+      >
+        <Label htmlFor="training-preferences" className="sr-only">
+          Preferências e contexto
+        </Label>
+        <textarea
+          id="training-preferences"
+          maxLength={1000}
+          rows={3}
+          value={input.preferences}
+          onChange={(event) => patch({ preferences: event.target.value })}
+          className="bg-background w-full rounded-md border p-3 text-sm"
+        />
+      </Section>
+
+      <Section
+        title="Consentimento para uso de IA"
+        hint="O Google Gemini receberá idade, peso, altura, respostas, preferências e queixas (que podem incluir dados de saúde). Não enviamos seu nome, email, senha ou histórico de treinos."
+      >
+        <p className="text-muted-foreground text-sm">
+          A IA pode errar e pode solicitar avaliação profissional em vez de
+          montar um treino. Ao salvar, o questionário, as justificativas e as
+          informações da geração ficam junto do treino; as medidas físicas
+          permanecem no perfil. Consulte os{' '}
+          <a
+            href="https://ai.google.dev/gemini-api/terms"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            termos do Gemini
+          </a>{' '}
+          sobre o tratamento dos dados pelo provedor.
+        </p>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={consent}
+            disabled={generating}
+            onChange={(event) => setConsent(event.target.checked)}
+            className="mt-1"
+          />
+          Autorizo o envio dos dados descritos ao Google Gemini para gerar este
+          treino.
+        </label>
+      </Section>
+
       {error && (
         <p
           role="alert"
@@ -390,8 +542,18 @@ export function GenerateFlow() {
           Sugestão geral para adultos saudáveis. Em caso de lesão, doença ou
           dúvida, procure um médico ou profissional de educação física.
         </p>
-        <Button size="lg" onClick={generate} disabled={generating}>
-          <Sparkles /> {generating ? 'Gerando…' : 'Gerar meu treino'}
+        <Button
+          size="lg"
+          onClick={generate}
+          disabled={
+            generating ||
+            !consent ||
+            !profile ||
+            profileLoading ||
+            !!profileError
+          }
+        >
+          <Sparkles /> {generating ? 'Gemini gerando…' : 'Gerar treino com IA'}
         </Button>
       </div>
     </div>
