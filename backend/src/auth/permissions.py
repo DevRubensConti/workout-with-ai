@@ -11,8 +11,6 @@ Convenção de nomes: "<recurso>:<ação>" (ex.: "workout:read").
 ROLE_USER = "user"
 ROLE_ADMIN = "admin"
 
-ROLES = (ROLE_USER, ROLE_ADMIN)
-
 _USER_PERMISSIONS = frozenset({"profile:read", "profile:write", "workouts:read", "workouts:write"})
 
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {

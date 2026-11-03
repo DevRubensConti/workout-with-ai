@@ -33,8 +33,10 @@ def seeded(session_factory):
                     level=info.level,
                     source=CATALOG_SOURCE,
                     source_id=info.source_id,
-                    primary_muscles=list(info.primary_muscles),
-                    secondary_muscles=list(info.secondary_muscles),
+                    primary_muscles=[info.muscle_group],
+                    secondary_muscles=["shoulders", "triceps"]
+                    if info.muscle_group == "chest"
+                    else [],
                     images=list(info.images),
                     translations=[
                         ExerciseTranslation(

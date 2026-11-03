@@ -5,6 +5,10 @@ Assistente de treinos com IA. Esqueleto com cadastro, login, autenticação e ho
 - `backend/`: FastAPI + SQLAlchemy + Alembic (auth própria: bcrypt + JWT em cookie HttpOnly)
 - `frontend/`: Next.js 16 (App Router) + Tailwind 4 + componentes estilo shadcn
 
+As dependencias sao gerenciadas separadamente em `backend/` e `frontend/`.
+Nao ha instalacao npm na raiz nem SDK Supabase no app: o backend acessa o
+Postgres via SQLAlchemy, e o frontend usa URLs publicas para as imagens.
+
 ## Configuração
 
 ### 1. Segredos

@@ -50,8 +50,6 @@ def load_catalog(db: Session) -> dict[str, ExerciseInfo]:
             equipment=row.equipment,
             level=row.level or "beginner",
             images=tuple(row.images or ()),
-            primary_muscles=tuple(row.primary_muscles or ()),
-            secondary_muscles=tuple(row.secondary_muscles or ()),
         )
         for row in rows
         if row.source_id

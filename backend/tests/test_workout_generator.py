@@ -28,15 +28,6 @@ INTERMEDIATE = {
     "Lying_Triceps_Press",
 }
 EXPERT = {"Hanging_Leg_Raise"}
-# Músculos de apoio para verificar que queixas não alteram a seleção.
-SECONDARY = {
-    "Romanian_Deadlift": ("lower back", "glutes"),
-    "Stiff-Legged_Dumbbell_Deadlift": ("lower back", "glutes"),
-    "Stiff-Legged_Barbell_Deadlift": ("lower back", "glutes"),
-    "Barbell_Bench_Press_-_Medium_Grip": ("shoulders", "triceps"),
-    "Dumbbell_Bench_Press": ("shoulders", "triceps"),
-    "Machine_Bench_Press": ("shoulders", "triceps"),
-}
 
 
 def build_catalog() -> dict[str, ExerciseInfo]:
@@ -64,8 +55,6 @@ def build_catalog() -> dict[str, ExerciseInfo]:
             equipment="barbell",
             level=level,
             images=(f"{source_id}/0.jpg",),
-            primary_muscles=(muscle,),
-            secondary_muscles=SECONDARY.get(source_id, ()),
         )
     return catalog
 

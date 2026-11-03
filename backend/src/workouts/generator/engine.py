@@ -29,8 +29,6 @@ class ExerciseInfo:
     equipment: str | None
     level: str
     images: tuple[str, ...]
-    primary_muscles: tuple[str, ...]
-    secondary_muscles: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -293,7 +291,7 @@ def generate(params: GenerationInput, catalog: Mapping[str, ExerciseInfo]) -> Ge
         )
         warnings.append(f"Séries por semana abaixo da meta em: {details}.")
 
-    rationale = _rationale(params, split.name, frequency, targets, focus)
+    rationale = _rationale(params, split.name, frequency, focus)
     references = sorted(
         {ref for text in rationale for ref in re.findall(r"\[(R\d+)\]", text)},
         key=lambda r: int(r[1:]),
@@ -326,7 +324,6 @@ def _rationale(
     params: GenerationInput,
     split_name: str,
     frequency: Counter[str],
-    targets: dict[str, int],
     focus: set[str],
 ) -> list[str]:
     goal_rules = GOALS[params.goal]

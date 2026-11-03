@@ -23,8 +23,3 @@ export function useAuth(): CurrentUser {
     throw new Error('useAuth deve ser usado dentro de <AuthProvider>.');
   return user;
 }
-
-export function useHasPermission(...permissions: string[]): boolean {
-  const { permissions: granted } = useAuth();
-  return permissions.every((p) => granted.includes(p));
-}
