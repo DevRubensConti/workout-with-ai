@@ -43,6 +43,57 @@ pnpm install
 pnpm dev                      # http://localhost:3000
 ```
 
+As chamadas do navegador usam `/api` no proprio frontend. O Next encaminha
+essas chamadas para `API_URL` (padrao: `http://localhost:8000`) e repassa os
+cookies de login/logout. Assim, o cookie HttpOnly pertence ao dominio do site
+e pode ser validado pelo proxy de rotas e pelos Server Components.
+O encaminhamento permite ate quatro minutos para respostas, para nao cortar
+a geracao de treinos por IA no limite padrao de 30 segundos do Next.
+`NEXT_PUBLIC_API_URL` continua aceito como alternativa legada para o destino
+no servidor; nao e mais usado pelo navegador para chamar outro dominio.
+
+### 4. Deploy no Render
+
+Crie dois Web Services do mesmo repositorio:
+
+- Backend: runtime Python, Root Directory `backend`,
+  Build Command `uv sync --frozen --no-dev`,
+  Start Command `uv run uvicorn src.main:app --host 0.0.0.0 --port $PORT`.
+- Frontend: runtime Node, Root Directory `frontend`,
+  Build Command `pnpm install --frozen-lockfile && pnpm build`,
+  Start Command `pnpm start`.
+
+No servico frontend, configure:
+
+```env
+API_URL=https://workout-with-ai-cp2x.onrender.com
+JWT_SECRET_KEY=<mesmo valor de SECRET_KEY do backend>
+```
+
+No servico backend, alem de `DATABASE_URL`, `SECRET_KEY`, `PEPPER` e demais
+configuracoes da aplicacao, configure:
+
+```env
+ENVIRONMENT=production
+SECURE=true
+SAME_SITE=lax
+ALLOWED_ORIGINS=https://workout-with-ai-frontend.onrender.com
+FRONTEND_URL=https://workout-with-ai-frontend.onrender.com
+```
+
+Substitua as URLs se os nomes dos servicos forem diferentes. Deixe
+`COOKIE_DOMAIN` vazio ou remova essa variavel: o cookie deve pertencer ao
+host do frontend, sem tentar compartilhar `.onrender.com`. Nao exponha
+`SECRET_KEY`, `JWT_SECRET_KEY`, `PEPPER` ou `DATABASE_URL` em variaveis
+`NEXT_PUBLIC_*`.
+
+Depois de enviar o codigo ao GitHub, faca novo build/deploy do frontend
+com `API_URL` configurada (o destino do rewrite e definido no build).
+Publique tambem as alteracoes de ambiente do backend. O login deve chamar
+`https://workout-with-ai-frontend.onrender.com/api/auth/login`, e nao o host
+da API diretamente. Limpe os cookies antigos dos dois sites e entre novamente.
+Somente alterar `SameSite` nao resolve a ausencia do cookie no frontend.
+
 ## Estrutura
 
 - `backend/src/auth/`: models, schemas, service, router, `require_permissions(...)`
@@ -75,8 +126,9 @@ O site adapta a navegacao e os controles para celular, mantendo o layout desktop
 Para testar pela LAN no iPhone, inicie o Next com
 `pnpm dev --hostname 0.0.0.0` e o Uvicorn com
 `uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000`.
-Configure `NEXT_PUBLIC_API_URL` no frontend com `http://IP_DO_WINDOWS:8000`,
-nao localhost, e acrescente `http://IP_DO_WINDOWS:3000` a `ALLOWED_ORIGINS`
+Mantenha `API_URL=http://localhost:8000` no frontend se os dois servidores
+rodam no mesmo Windows: o navegador usa `/api` no site e o Next encaminha
+para o backend. Acrescente `http://IP_DO_WINDOWS:3000` a `ALLOWED_ORIGINS`
 do backend, preservando as origens existentes. Reinicie os servidores apos
 alterar as variaveis. Acesse `http://IP_DO_WINDOWS:3000` no Safari pela mesma
 rede privada; libere somente as portas necessarias no firewall privado.

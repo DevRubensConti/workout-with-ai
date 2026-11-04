@@ -1,7 +1,6 @@
-// Cliente da API para uso em Client Components (o cookie HttpOnly vai via credentials).
+// Mesmo dominio do site: o cookie HttpOnly tambem fica disponivel ao Next.js.
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_URL = '/api';
 
 export class ApiError extends Error {
   status: number;
