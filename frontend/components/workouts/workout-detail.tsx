@@ -55,15 +55,15 @@ function Chip({ children }: { children: React.ReactNode }) {
 
 function ExerciseRow({ item, index }: { item: PlanExercise; index: number }) {
   return (
-    <li className="bg-card flex gap-4 rounded-xl border p-3 md:p-4">
-      <div className="bg-muted relative h-20 w-28 shrink-0 overflow-hidden rounded-lg">
+    <li className="bg-card flex gap-3 rounded-xl border p-3 md:gap-4 md:p-4">
+      <div className="bg-muted relative h-16 w-16 shrink-0 overflow-hidden rounded-lg sm:h-20 sm:w-28">
         <ExerciseImage
           key={item.images[0] ?? 'empty'}
           path={item.images[0]}
           alt={item.exercise_name}
           sizes="112px"
         />
-        <span className="absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded-full bg-black/60 text-xs font-semibold text-white">
+        <span className="bg-overlay/70 text-overlay-foreground absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded-full text-xs font-semibold">
           {index + 1}
         </span>
       </div>
@@ -251,23 +251,23 @@ export function WorkoutDetail({
       {canWrite && <ActiveSessionBanner />}
 
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-3">
+        <div className="min-w-0 flex-1 basis-64 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+            <h1 className="min-w-0 text-2xl font-bold tracking-tight md:text-3xl">
               {plan.name}
             </h1>
             <span
               className={cn(
                 'rounded-full px-2.5 py-1 text-xs font-medium',
                 isActive
-                  ? 'bg-primary/15 text-primary'
+                  ? 'bg-accent text-accent-foreground'
                   : 'bg-muted text-muted-foreground'
               )}
             >
               {isActive ? 'Treino atual' : 'Arquivado'}
             </span>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             {plan.goal && <Chip>{plan.goal}</Chip>}
             {plan.level && (
               <span
@@ -357,7 +357,7 @@ export function WorkoutDetail({
         {canWrite && day.exercises.length > 0 && (
           <Button
             size="lg"
-            className="w-full sm:w-auto"
+            className="h-auto min-h-11 w-full whitespace-normal sm:w-auto"
             onClick={() => startDay(day.id)}
             disabled={starting}
           >

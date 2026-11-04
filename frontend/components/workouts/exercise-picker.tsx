@@ -118,9 +118,9 @@ export function ExercisePicker({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex h-[88vh] max-w-3xl flex-col">
-        <div className="space-y-3 border-b p-5 pr-14">
-          <div>
+      <DialogContent className="flex h-[88dvh] max-w-3xl flex-col overflow-hidden">
+        <div className="shrink-0 space-y-3 border-b p-4 sm:p-5">
+          <div className="pr-10">
             <DialogTitle>Adicionar exercícios</DialogTitle>
             <DialogDescription className="mt-1">
               Busque no catálogo e toque para adicionar. Você pode escolher
@@ -140,7 +140,7 @@ export function ExercisePicker({
           <div
             role="group"
             aria-label="Grupo muscular"
-            className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [&::-webkit-scrollbar]:hidden"
+            className="flex gap-2 overflow-x-auto pb-1"
           >
             {chips.map((chip) => (
               <button
@@ -164,7 +164,7 @@ export function ExercisePicker({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
           {state?.error ? (
             <p
               role="alert"
@@ -203,7 +203,7 @@ export function ExercisePicker({
                         />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">
+                        <span className="block text-sm font-medium sm:text-base">
                           {exercise.name}
                         </span>
                         <span className="text-muted-foreground block truncate text-sm">

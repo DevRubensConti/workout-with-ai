@@ -1,4 +1,7 @@
-import { ExerciseImage } from '@/components/exercises/exercise-image';
+import {
+  ExerciseHoverImage,
+  ExerciseImage,
+} from '@/components/exercises/exercise-image';
 import {
   equipmentLabel,
   levelBadgeClass,
@@ -34,7 +37,7 @@ export function ExerciseCard({ exercise, onSelect }: ExerciseCardProps) {
         />
         {second && (
           // A segunda imagem mostra a outra fase do movimento ao passar o mouse.
-          <ExerciseImage
+          <ExerciseHoverImage
             key={second}
             path={second}
             alt=""

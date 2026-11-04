@@ -15,15 +15,14 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+  preload: false,
 });
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
-  ],
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
 };
 
 export const metadata: Metadata = {
@@ -41,11 +40,24 @@ export default function RootLayout({
     // suppressHydrationWarning: necessário para o next-themes (classe "dark")
     <html lang="pt-BR" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] antialiased`}
       >
         <Providers>
           {children}
-          <Toaster richColors closeButton position="top-right" />
+          <Toaster
+            richColors
+            closeButton
+            position="top-right"
+            offset={{
+              top: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+              right: '16px',
+            }}
+            mobileOffset={{
+              top: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+              left: '16px',
+              right: '16px',
+            }}
+          />
         </Providers>
       </body>
     </html>

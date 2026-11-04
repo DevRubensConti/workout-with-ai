@@ -38,9 +38,11 @@ function Stat({
   value: string;
 }) {
   return (
-    <div className="bg-card rounded-xl border p-4">
-      <Icon className="text-primary mb-2 size-5" />
-      <p className="text-xl font-semibold tabular-nums">{value}</p>
+    <div className="bg-data-surface rounded-xl border p-4">
+      <Icon className="text-data mb-2 size-5" />
+      <p className="text-data text-lg font-semibold tabular-nums sm:text-xl">
+        {value}
+      </p>
       <p className="text-muted-foreground text-xs">{label}</p>
     </div>
   );
@@ -171,7 +173,7 @@ export function SessionSummaryView({
               ))}
             </ul>
             <div className="mt-4">
-              <ExerciseProgress exerciseId={exercise.exercise_id} />
+              <ExerciseProgress exerciseId={exercise.exercise_id} collapsible />
             </div>
           </li>
         ))}

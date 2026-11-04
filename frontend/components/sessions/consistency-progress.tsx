@@ -64,7 +64,7 @@ export function ConsistencyProgress() {
                 className={cn(
                   'rounded-xl border p-3 text-xs',
                   item.unlocked
-                    ? 'bg-primary/10 border-primary/30 text-primary'
+                    ? 'bg-accent border-primary/30 text-accent-foreground'
                     : 'text-muted-foreground'
                 )}
               >

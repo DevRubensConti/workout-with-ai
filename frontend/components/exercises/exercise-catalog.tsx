@@ -97,6 +97,14 @@ export function ExerciseCatalog() {
   // Os filtros ficam guardados para não sumirem enquanto uma nova página carrega.
   const [filters, setFilters] = useState<ExerciseFilters | null>(null);
   const resultsTop = useRef<HTMLDivElement>(null);
+  const filterDetails = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    if (filterDetails.current) {
+      filterDetails.current.open =
+        window.matchMedia('(min-width: 768px)').matches;
+    }
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -373,7 +381,7 @@ export function ExerciseCatalog() {
     : 'Carregando exercícios…';
 
   return (
-    <div className="bg-muted/20 min-h-screen pb-12">
+    <div className="bg-muted/20 min-w-0 pb-8 md:pb-12">
       <section className="from-primary/10 via-background to-background border-b bg-gradient-to-br">
         <div className="container mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
           <div className="flex items-center gap-4">
@@ -419,7 +427,7 @@ export function ExerciseCatalog() {
                   type="button"
                   onClick={() => setSearchInput('')}
                   aria-label="Limpar busca"
-                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-0 flex size-11 -translate-y-1/2 items-center justify-center"
                 >
                   <X className="size-4" />
                 </button>
@@ -473,7 +481,7 @@ export function ExerciseCatalog() {
                 aria-pressed={muscleGroup === chip.value}
                 onClick={() => changeMuscleGroup(chip.value)}
                 className={cn(
-                  'shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors',
+                  'min-h-11 shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors md:min-h-0',
                   muscleGroup === chip.value
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30'
@@ -490,12 +498,15 @@ export function ExerciseCatalog() {
         ref={resultsTop}
         className="container mx-auto max-w-7xl scroll-mt-24 px-4 pt-6 md:px-6"
       >
-        <details open className="bg-card mb-5 rounded-2xl border shadow-sm">
+        <details
+          ref={filterDetails}
+          className="bg-card mb-5 rounded-2xl border shadow-sm"
+        >
           <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-center gap-2 rounded-2xl p-4 text-sm font-semibold outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
             <SlidersHorizontal className="text-primary size-4" />
             Refinar catálogo
             {activeFilters.length > 0 && (
-              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-xs">
+              <span className="bg-accent text-accent-foreground rounded-full px-2 py-0.5 text-xs">
                 {activeFilters.length} ativo(s)
               </span>
             )}
@@ -518,8 +529,8 @@ export function ExerciseCatalog() {
                     setPage(1);
                   }}
                   className={cn(
-                    'border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-10 w-full min-w-0 rounded-lg border px-2 text-sm outline-none focus-visible:ring-[3px]',
-                    filter.value && 'border-primary/40 bg-primary/5'
+                    'border-input bg-elevated focus-visible:border-ring focus-visible:ring-ring/50 h-10 w-full min-w-0 rounded-lg border px-2 text-sm outline-none focus-visible:ring-[3px]',
+                    filter.value && 'border-primary/40 bg-accent'
                   )}
                 >
                   <option value="">Todos</option>
@@ -596,7 +607,7 @@ export function ExerciseCatalog() {
                 </p>
               </div>
             </div>
-            <div className="grid shrink-0 grid-cols-2 gap-2">
+            <div className="grid shrink-0 gap-2 min-[400px]:grid-cols-2 md:grid-cols-2">
               <Button
                 variant="outline"
                 disabled={bulkDisabled}
@@ -680,7 +691,7 @@ export function ExerciseCatalog() {
                 {canChoose && (
                   <label
                     className={cn(
-                      'flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition-colors',
+                      'flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition-colors',
                       exercise.enabled_for_ai
                         ? 'border-primary/20 bg-primary/5 text-primary'
                         : 'bg-card text-muted-foreground'
@@ -718,7 +729,7 @@ export function ExerciseCatalog() {
         {listData && listData.total_pages > 1 && !listError && (
           <nav
             aria-label="Paginação do catálogo"
-            className="mt-8 flex items-center justify-between gap-3"
+            className="mt-8 grid grid-cols-[auto_1fr_auto] items-center gap-2"
           >
             <button
               type="button"
@@ -726,9 +737,10 @@ export function ExerciseCatalog() {
               onClick={() => goToPage(listData.page - 1)}
               className="hover:bg-accent inline-flex h-10 items-center gap-1 rounded-lg border px-4 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40"
             >
-              <ChevronLeft className="size-4" /> Anterior
+              <ChevronLeft className="size-4" />{' '}
+              <span className="sr-only sm:not-sr-only">Anterior</span>
             </button>
-            <span className="text-muted-foreground text-sm">
+            <span className="text-muted-foreground text-center text-sm">
               Página{' '}
               <span className="text-foreground font-semibold">
                 {listData.page}
@@ -745,7 +757,8 @@ export function ExerciseCatalog() {
               onClick={() => goToPage(listData.page + 1)}
               className="hover:bg-accent inline-flex h-10 items-center gap-1 rounded-lg border px-4 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40"
             >
-              Próxima <ChevronRight className="size-4" />
+              <span className="sr-only sm:not-sr-only">Próxima</span>{' '}
+              <ChevronRight className="size-4" />
             </button>
           </nav>
         )}
@@ -779,7 +792,7 @@ export function ExerciseCatalog() {
               pendingBulk.labels.map((label) => (
                 <span
                   key={label}
-                  className="bg-background rounded-md border px-2 py-1"
+                  className="bg-elevated rounded-md border px-2 py-1"
                 >
                   {label}
                 </span>

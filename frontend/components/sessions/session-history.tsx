@@ -169,9 +169,10 @@ export function SessionHistory() {
             disabled={data.page <= 1 || loading}
             onClick={() => setPage((value) => value - 1)}
           >
-            <ChevronLeft /> Anterior
+            <ChevronLeft />{' '}
+            <span className="sr-only sm:not-sr-only">Anterior</span>
           </Button>
-          <span className="text-muted-foreground text-sm">
+          <span className="text-muted-foreground text-center text-sm">
             Página {data.page} de {data.total_pages}
           </span>
           <Button
@@ -179,7 +180,8 @@ export function SessionHistory() {
             disabled={data.page >= data.total_pages || loading}
             onClick={() => setPage((value) => value + 1)}
           >
-            Próxima <ChevronRight />
+            <span className="sr-only sm:not-sr-only">Próxima</span>{' '}
+            <ChevronRight />
           </Button>
         </nav>
       )}

@@ -19,23 +19,25 @@ function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         data-slot="dialog-overlay"
-        className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+        className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 bg-overlay/60 fixed inset-0 z-50 md:backdrop-blur-sm"
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-1/2 left-1/2 z-50 w-[calc(100%-1.5rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border shadow-xl outline-none',
+          'bg-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-2xl border shadow-xl outline-none',
           className
         )}
         {...props}
       >
+        <div className="pointer-events-none sticky top-0 z-10 h-0 shrink-0 self-stretch">
+          <DialogPrimitive.Close
+            aria-label="Fechar"
+            className="focus-visible:ring-ring/50 bg-overlay/80 text-overlay-foreground hover:bg-overlay/90 pointer-events-auto absolute top-2 right-2 inline-flex size-11 items-center justify-center rounded-full transition-colors outline-none focus-visible:ring-[3px] sm:size-9"
+          >
+            <X className="size-4" />
+          </DialogPrimitive.Close>
+        </div>
         {children}
-        <DialogPrimitive.Close
-          aria-label="Fechar"
-          className="focus-visible:ring-ring/50 absolute top-3 right-3 z-10 inline-flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors outline-none hover:bg-black/60 focus-visible:ring-[3px]"
-        >
-          <X className="size-4" />
-        </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );

@@ -41,7 +41,8 @@ export function ActiveSessionBanner() {
         </span>
       </span>
       <span className="text-primary inline-flex items-center gap-1 text-sm font-medium">
-        Continuar <ArrowRight className="size-4" />
+        <span className="sr-only sm:not-sr-only">Continuar</span>{' '}
+        <ArrowRight className="size-4" />
       </span>
     </Link>
   );

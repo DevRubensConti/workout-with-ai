@@ -54,7 +54,7 @@ export function ExerciseDetailDialog({
       open={Boolean(exercise)}
       onOpenChange={(open) => !open && onClose()}
     >
-      <DialogContent className="max-h-[92vh] overflow-y-auto">
+      <DialogContent className="overflow-y-auto">
         {exercise && (
           <DetailBody
             key={exercise.id}
@@ -134,7 +134,7 @@ function DetailBody({
                 )}
               >
                 <ExerciseImage path={path} alt="" sizes="240px" />
-                <span className="absolute bottom-1.5 left-1.5 rounded bg-black/55 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                <span className="bg-overlay/70 text-overlay-foreground absolute bottom-1.5 left-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium">
                   {index === 0 ? 'Início' : 'Final'}
                 </span>
               </button>
@@ -211,7 +211,7 @@ function DetailBody({
                       key={`${index}-${step}`}
                       className="flex gap-3 text-sm leading-relaxed"
                     >
-                      <span className="bg-primary/10 text-primary flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                      <span className="bg-accent text-accent-foreground flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                         {index + 1}
                       </span>
                       <span>{step}</span>

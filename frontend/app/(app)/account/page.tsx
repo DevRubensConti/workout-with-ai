@@ -30,9 +30,9 @@ export default async function AccountPage() {
         <CardContent>
           <dl className="grid gap-3 text-sm sm:grid-cols-[8rem_1fr]">
             <dt className="text-muted-foreground">Nome</dt>
-            <dd>{user.name}</dd>
+            <dd className="min-w-0">{user.name}</dd>
             <dt className="text-muted-foreground">E-mail</dt>
-            <dd>{user.email}</dd>
+            <dd className="min-w-0">{user.email}</dd>
           </dl>
         </CardContent>
       </Card>

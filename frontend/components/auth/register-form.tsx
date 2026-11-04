@@ -124,7 +124,10 @@ export function RegisterForm() {
           </Button>
           <p className="text-muted-foreground text-sm">
             Já tem conta?{' '}
-            <Link href="/login" className="text-primary font-medium">
+            <Link
+              href="/login"
+              className="text-primary inline-flex min-h-11 items-center font-medium"
+            >
               Entrar
             </Link>
           </p>

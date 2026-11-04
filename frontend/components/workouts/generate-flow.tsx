@@ -76,7 +76,7 @@ function OptionCard({
       className={cn(
         'focus-visible:ring-ring/60 rounded-xl border p-4 text-left transition-colors outline-none focus-visible:ring-[3px]',
         selected
-          ? 'border-primary bg-primary/10'
+          ? 'border-primary bg-accent'
           : 'bg-card hover:border-primary/50'
       )}
     >
@@ -233,7 +233,7 @@ export function GenerateFlow() {
   }
 
   return (
-    <div className="container mx-auto max-w-3xl space-y-8 px-4 py-8 md:px-6">
+    <div className="container mx-auto max-w-3xl space-y-6 px-4 py-6 md:space-y-8 md:px-6 md:py-8">
       <div>
         <Link
           href="/workouts"
@@ -334,7 +334,7 @@ export function GenerateFlow() {
         <div
           role="radiogroup"
           aria-label="Dias por semana"
-          className="flex gap-2"
+          className="flex flex-wrap gap-2"
         >
           {DAYS_OPTIONS.map((days) => (
             <button
@@ -475,7 +475,7 @@ export function GenerateFlow() {
           rows={3}
           value={input.complaint_details}
           onChange={(event) => patch({ complaint_details: event.target.value })}
-          className="bg-background w-full rounded-md border p-3 text-sm"
+          className="bg-elevated w-full rounded-md border p-3 text-sm"
         />
       </Section>
 
@@ -492,7 +492,7 @@ export function GenerateFlow() {
           rows={3}
           value={input.preferences}
           onChange={(event) => patch({ preferences: event.target.value })}
-          className="bg-background w-full rounded-md border p-3 text-sm"
+          className="bg-elevated w-full rounded-md border p-3 text-sm"
         />
       </Section>
 
@@ -515,13 +515,13 @@ export function GenerateFlow() {
           </a>{' '}
           sobre o tratamento dos dados pelo provedor.
         </p>
-        <label className="flex items-start gap-3 text-sm">
+        <label className="bg-primary/5 flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm">
           <input
             type="checkbox"
             checked={consent}
             disabled={generating}
             onChange={(event) => setConsent(event.target.checked)}
-            className="mt-1"
+            className="accent-primary mt-0.5 size-5 shrink-0"
           />
           Autorizo o envio dos dados descritos ao Google Gemini para gerar este
           treino.
@@ -544,6 +544,7 @@ export function GenerateFlow() {
         </p>
         <Button
           size="lg"
+          className="w-full sm:w-auto"
           onClick={generate}
           disabled={
             generating ||

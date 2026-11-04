@@ -79,7 +79,7 @@ export function ForgotPasswordForm() {
       <CardFooter className={sent ? '' : 'justify-center'}>
         <Link
           href="/login"
-          className="text-muted-foreground hover:text-primary text-sm"
+          className="text-muted-foreground hover:text-primary inline-flex min-h-11 items-center text-sm"
         >
           Voltar para o login
         </Link>

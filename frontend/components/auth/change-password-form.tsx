@@ -103,7 +103,11 @@ export function ChangePasswordForm() {
         </CardContent>
 
         <CardFooter className="pt-6">
-          <Button type="submit" disabled={isLoading}>
+          <Button
+            type="submit"
+            className="w-full sm:w-auto"
+            disabled={isLoading}
+          >
             {isLoading ? 'Salvando...' : 'Atualizar senha'}
           </Button>
         </CardFooter>

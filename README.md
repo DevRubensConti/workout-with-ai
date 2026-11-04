@@ -52,6 +52,73 @@ pnpm dev                      # http://localhost:3000
 - `frontend/app/(app)/`: área logada (home, conta); o layout valida o usuário na API
 - `frontend/lib/navigation.ts`: menu por permissão. Novas páginas entram aqui.
 
+## Interface no celular
+
+O site adapta a navegacao e os controles para celular, mantendo o layout desktop:
+
+- Navegacao inferior abaixo de 768px, com as mesmas rotas/permissoes do menu desktop.
+  Tema e Minha conta continuam no cabecalho.
+- Controles de pelo menos 44px de altura no celular e campos de 16px para evitar
+  zoom automatico no iPhone, sem impedir o zoom manual de acessibilidade.
+- Formularios, montador e listas reorganizados para telas estreitas; filtros
+  avancados do catalogo recolhidos inicialmente no celular.
+- Dialogos com altura dinamica, rolagem interna e fechamento acessivel durante
+  a rolagem. Espacamento reservado para as areas seguras e navegacao inferior.
+- Na execucao, cargas/repeticoes e conclusao de series continuam visiveis;
+  cancelar/finalizar ficam na barra inferior, acima da navegacao.
+- Cronometros atualizam apenas seus proprios componentes e sincronizam ao
+  retornar a aba. A segunda imagem dos cards e carregada somente em dispositivos
+  com mouse/hover; a evolucao no resumo da sessao e consultada ao expandir.
+  A fonte monoespacada e carregada quando usada, sem preload em todas as telas.
+- Respeito a preferencia de movimento reduzido e foco visivel para teclado.
+
+Para testar pela LAN no iPhone, inicie o Next com
+`pnpm dev --hostname 0.0.0.0` e o Uvicorn com
+`uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000`.
+Configure `NEXT_PUBLIC_API_URL` no frontend com `http://IP_DO_WINDOWS:8000`,
+nao localhost, e acrescente `http://IP_DO_WINDOWS:3000` a `ALLOWED_ORIGINS`
+do backend, preservando as origens existentes. Reinicie os servidores apos
+alterar as variaveis. Acesse `http://IP_DO_WINDOWS:3000` no Safari pela mesma
+rede privada; libere somente as portas necessarias no firewall privado.
+Nao substitua arquivos `.env` existentes nem execute migrations para este teste.
+
+Para usar na academia por outra rede/4G, site e API precisam estar hospedados e
+acessiveis via HTTPS; a adaptacao visual nao publica o projeto.
+O registro de treinos continua dependendo de conexao: nao ha modo offline,
+PWA ou armazenamento local de dados pessoais adicionado por esta adaptacao.
+So considere uma alteracao salva quando a interface indicar **Salvo**.
+
+Validacao: `pnpm typecheck`, `pnpm lint` e `pnpm build`.
+Para testar a UX, conferir 320px, 390px, 768px e desktop, alturas reduzidas
+para os dialogos, temas claro/escuro, navegacao, filtros, montador, cargas
+com virgula e historico. Use dados sinteticos/ambiente de teste nas acoes de
+salvamento; nao gere treinos por IA nem grave no banco real para validar o layout.
+Uma viewport simulada nao substitui testar o teclado e as areas seguras no
+Safari de um iPhone fisico.
+
+## Paleta e temas
+
+As cores ficam centralizadas em `frontend/app/globals.css`: `--palette-*`
+define a paleta de marca; `:root` define o tema claro e `.dark` aplica a
+paleta escura. Os componentes usam tokens semanticos via Tailwind, sem hex
+ou cores de marca locais.
+
+- Fundos escuros: base `#0D0F0E`, cards `#161A18`, campos/modais `#1F2421`
+  e bordas `#2A312D`.
+- Acoes principais: `action` lima `#C8FF3D`, hover/toque `action-hover`
+  `#B0E62E`, sempre com texto escuro. Links usam `primary`, mais escuro
+  no tema claro para preservar contraste.
+- Selecao, selos e conquistas: `accent` (lima suave `#232E10` no escuro).
+- Dados e graficos: `data` roxo `#A585FF`, `data-secondary` `#7C5CE0`
+  e `data-surface` `#1F1830` no escuro, com equivalentes claros.
+- Textos, avisos e erros possuem tokens proprios para manter legibilidade
+  e distinguir mensagens de seguranca das acoes normais.
+
+A alternancia claro/escuro/sistema permanece disponivel. Campos nativos,
+notificacoes e a cor da barra do navegador tambem acompanham os tokens.
+Ao alterar a paleta, conferir contraste nos dois temas, botoes em hover/toque,
+foco, graficos, avisos, erros e dialogos.
+
 ## Supabase
 
 - Use a connection string do Postgres (Project Settings > Database).

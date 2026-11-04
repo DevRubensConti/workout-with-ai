@@ -42,11 +42,11 @@ export function GenerationPanel({ info, mode }: GenerationPanelProps) {
         {info.warnings.length > 0 && (
           <ul
             aria-label="Avisos"
-            className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+            className="border-warning/40 bg-warning-surface space-y-2 rounded-lg border p-3 text-sm"
           >
             {info.warnings.map((warning) => (
               <li key={warning} className="flex gap-2">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" />
                 <span>{warning}</span>
               </li>
             ))}
@@ -68,7 +68,7 @@ export function GenerationPanel({ info, mode }: GenerationPanelProps) {
                   <li key={entry.muscle} className="space-y-1">
                     <div className="flex justify-between text-sm">
                       <span>{entry.label}</span>
-                      <span className="text-muted-foreground tabular-nums">
+                      <span className="text-data tabular-nums">
                         {entry.target > 0
                           ? `${entry.sets}/${entry.target}`
                           : `${entry.sets} · sem meta definida`}
@@ -86,7 +86,7 @@ export function GenerationPanel({ info, mode }: GenerationPanelProps) {
                         <div
                           className={cn(
                             'h-full',
-                            reached ? 'bg-primary' : 'bg-amber-500'
+                            reached ? 'bg-data' : 'bg-data-secondary'
                           )}
                           style={{
                             width: `${Math.min(100, (entry.sets / entry.target) * 100)}%`,

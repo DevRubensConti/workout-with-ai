@@ -81,7 +81,7 @@ export function LoginForm({ sessionExpired }: { sessionExpired: boolean }) {
               <Label htmlFor="password">Senha</Label>
               <Link
                 href="/forgot-password"
-                className="text-muted-foreground hover:text-primary text-xs"
+                className="text-muted-foreground hover:text-primary inline-flex min-h-11 items-center text-xs"
               >
                 Esqueceu a senha?
               </Link>
@@ -103,7 +103,10 @@ export function LoginForm({ sessionExpired }: { sessionExpired: boolean }) {
           </Button>
           <p className="text-muted-foreground text-sm">
             Não tem conta?{' '}
-            <Link href="/register" className="text-primary font-medium">
+            <Link
+              href="/register"
+              className="text-primary inline-flex min-h-11 items-center font-medium"
+            >
               Cadastre-se
             </Link>
           </p>

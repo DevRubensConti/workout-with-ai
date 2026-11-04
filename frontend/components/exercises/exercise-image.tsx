@@ -2,7 +2,7 @@
 
 import { Dumbbell } from 'lucide-react';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 
 import { exerciseImageUrl } from '@/lib/config';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,23 @@ interface ExerciseImageProps {
   sizes: string;
   className?: string;
   priority?: boolean;
+}
+
+const HOVER_QUERY = '(hover: hover) and (pointer: fine)';
+
+function subscribeToHover(onChange: () => void) {
+  const media = window.matchMedia(HOVER_QUERY);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
+export function ExerciseHoverImage(props: ExerciseImageProps) {
+  const canHover = useSyncExternalStore(
+    subscribeToHover,
+    () => window.matchMedia(HOVER_QUERY).matches,
+    () => false
+  );
+  return canHover ? <ExerciseImage {...props} /> : null;
 }
 
 // O pai precisa ter `position: relative` e um tamanho definido.

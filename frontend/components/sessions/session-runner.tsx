@@ -61,6 +61,58 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
 
+function SessionClock({
+  startedAt,
+  restEnd = null,
+  compact = false,
+}: {
+  startedAt: string;
+  restEnd?: number | null;
+  compact?: boolean;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    const sync = () => setNow(Date.now());
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, []);
+  const elapsed = (now - parseApiDate(startedAt).getTime()) / 1000;
+  const restLeft = restEnd === null ? null : Math.ceil((restEnd - now) / 1000);
+  return (
+    <>
+      <p
+        role={compact ? undefined : 'timer'}
+        aria-label={
+          restLeft === null ? 'Tempo de treino' : 'Tempo restante de descanso'
+        }
+        className={
+          compact
+            ? 'text-data font-mono text-xl font-semibold tabular-nums'
+            : 'text-data my-3 font-mono text-5xl font-bold tabular-nums min-[400px]:text-6xl sm:text-7xl'
+        }
+      >
+        {formatClock(restLeft === null ? elapsed : Math.max(0, restLeft))}
+      </p>
+      {!compact && restLeft !== null && (
+        <>
+          <p className="text-muted-foreground text-sm">
+            Tempo de treino: {formatClock(elapsed)}
+          </p>
+          <p role="status" className="mt-2 font-medium">
+            {restLeft <= 0
+              ? 'Descanso concluído. Retome quando estiver pronto.'
+              : 'Recupere-se antes da próxima série.'}
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 export function SessionRunner({
   session,
   onFinished,
@@ -74,7 +126,6 @@ export function SessionRunner({
   const chain = useRef<Promise<boolean>>(Promise.resolve(true));
 
   const [saveState, setSaveState] = useState<SaveState>('saved');
-  const [now, setNow] = useState(() => Date.now());
   const [restEnd, setRestEnd] = useState<number | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -114,11 +165,6 @@ export function SessionRunner({
       });
     return () => controller.abort();
   }, [preferenceRetry]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, []);
 
   function persist(): Promise<boolean> {
     chain.current = chain.current.then(async () => {
@@ -173,7 +219,7 @@ export function SessionRunner({
     );
   }
 
-  function toggleSet(exercise: ExerciseRows, set: SetRow) {
+  function toggleSet(exercise: ExerciseRows, set: SetRow, completedAt: number) {
     const completed = !set.completed;
     if (
       completed &&
@@ -188,7 +234,7 @@ export function SessionRunner({
     }
     patchSet(exercise.exerciseId, set.key, { completed });
     const rest = exercise.target?.rest_seconds;
-    if (completed && rest && restEnabled) setRestEnd(now + rest * 1000);
+    if (completed && rest && restEnabled) setRestEnd(completedAt + rest * 1000);
     if (!completed) setRestEnd(null);
   }
 
@@ -278,8 +324,6 @@ export function SessionRunner({
       sum + exercise.sets.filter((set) => set.completed).length,
     0
   );
-  const elapsed = (now - parseApiDate(session.started_at).getTime()) / 1000;
-  const restLeft = restEnd !== null ? Math.ceil((restEnd - now) / 1000) : null;
   const activeExercise = rows[exerciseIndex];
   const currentWeights =
     activeExercise?.sets
@@ -298,8 +342,8 @@ export function SessionRunner({
   }
 
   return (
-    <div className="pb-28">
-      <div className="bg-background/90 sticky top-16 z-30 border-b backdrop-blur">
+    <div className="pb-24 md:pb-8">
+      <div className="bg-background md:bg-background/90 sticky top-[var(--app-header-height)] z-30 border-b md:backdrop-blur">
         <div className="container mx-auto max-w-3xl space-y-2 px-4 py-3 md:px-6">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -310,13 +354,8 @@ export function SessionRunner({
                 {session.plan_name}
               </p>
             </div>
-            <div className="text-right">
-              <p
-                className="font-mono text-xl font-semibold tabular-nums"
-                aria-label="Tempo de treino"
-              >
-                {formatClock(elapsed)}
-              </p>
+            <div className="shrink-0 text-right">
+              <SessionClock startedAt={session.started_at} compact />
               <p
                 className={cn(
                   'text-xs',
@@ -354,43 +393,26 @@ export function SessionRunner({
       <div className="container mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6">
         <section
           aria-label="Temporizador"
-          className="from-primary/10 to-card rounded-3xl border bg-gradient-to-br p-6 text-center shadow-sm"
+          className="from-primary/10 to-card rounded-2xl border bg-gradient-to-br p-4 text-center shadow-sm sm:rounded-3xl sm:p-6"
         >
           <p className="text-muted-foreground flex items-center justify-center gap-2 text-sm">
             <Timer className="size-4" />{' '}
-            {restEnabled && restLeft !== null
+            {restEnabled && restEnd !== null
               ? 'Descanso entre séries'
               : 'Tempo de treino'}
           </p>
-          <p
-            role="timer"
-            aria-label={
-              restEnabled && restLeft !== null
-                ? 'Tempo restante de descanso'
-                : 'Tempo total de treino'
-            }
-            className="text-primary my-3 font-mono text-6xl font-bold tabular-nums sm:text-7xl"
-          >
-            {formatClock(
-              restEnabled && restLeft !== null ? Math.max(0, restLeft) : elapsed
-            )}
-          </p>
-          {restEnabled && restLeft !== null && (
+          <SessionClock
+            startedAt={session.started_at}
+            restEnd={restEnabled ? restEnd : null}
+          />
+          {restEnabled && restEnd !== null && (
             <>
-              <p className="text-muted-foreground text-sm">
-                Tempo de treino: {formatClock(elapsed)}
-              </p>
-              <p role="status" className="mt-2 font-medium">
-                {restLeft <= 0
-                  ? 'Descanso concluído. Retome quando estiver pronto.'
-                  : 'Recupere-se antes da próxima série.'}
-              </p>
               <Button
                 variant="outline"
                 className="mt-3"
                 onClick={() => setRestEnd(null)}
               >
-                {restLeft > 0 ? 'Encerrar descanso' : 'Fechar descanso'}
+                Encerrar descanso
               </Button>
             </>
           )}
@@ -416,13 +438,14 @@ export function SessionRunner({
             </p>
           )}
         </section>
-        <div className="flex items-center justify-between gap-3">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2 sm:gap-3">
           <Button
             variant="outline"
             disabled={exerciseIndex <= 0 || busy !== null}
             onClick={() => void navigateExercise(exerciseIndex - 1)}
           >
-            <ChevronLeft /> Anterior
+            <ChevronLeft />{' '}
+            <span className="sr-only sm:not-sr-only">Exercício anterior</span>
           </Button>
           <label className="min-w-0 flex-1 text-center text-xs">
             <span className="text-muted-foreground">
@@ -430,7 +453,7 @@ export function SessionRunner({
             </span>
             <select
               aria-label="Exercício em execução"
-              className="bg-background mt-1 h-9 w-full truncate rounded-lg border px-2 text-sm"
+              className="bg-elevated mt-1 h-9 w-full truncate rounded-lg border px-2 text-sm"
               value={exerciseIndex}
               disabled={busy !== null}
               onChange={(event) =>
@@ -449,7 +472,8 @@ export function SessionRunner({
             disabled={exerciseIndex >= rows.length - 1 || busy !== null}
             onClick={() => void navigateExercise(exerciseIndex + 1)}
           >
-            Próximo <ChevronRight />
+            <span className="sr-only sm:not-sr-only">Próximo exercício</span>{' '}
+            <ChevronRight />
           </Button>
         </div>
         <fieldset disabled={busy !== null}>
@@ -500,7 +524,7 @@ export function SessionRunner({
               )}
 
               <div className="mt-4 space-y-2">
-                <div className="text-muted-foreground grid grid-cols-[2rem_1fr_1fr_2.5rem_1.75rem] items-center gap-2 px-1 text-xs font-medium">
+                <div className="text-muted-foreground grid grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem_2.75rem] items-center gap-1 px-1 text-xs font-medium sm:gap-2">
                   <span>Série</span>
                   <span>Carga (kg)</span>
                   <span>Reps</span>
@@ -514,7 +538,7 @@ export function SessionRunner({
                     <div
                       key={set.key}
                       className={cn(
-                        'grid grid-cols-[2rem_1fr_1fr_2.5rem_1.75rem] items-center gap-2 rounded-lg p-1 transition-colors',
+                        'grid grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,1fr)_2.75rem_2.75rem] items-center gap-1 rounded-lg p-1 transition-colors sm:gap-2',
                         set.completed && 'bg-primary/10'
                       )}
                     >
@@ -550,10 +574,10 @@ export function SessionRunner({
                         type="button"
                         aria-pressed={set.completed}
                         aria-label={`${set.completed ? 'Desmarcar' : 'Concluir'} série ${index + 1} de ${exercise.name}`}
-                        onClick={() => toggleSet(exercise, set)}
+                        onClick={() => toggleSet(exercise, set, Date.now())}
                         disabled={restEnabled === null}
                         className={cn(
-                          'flex size-10 items-center justify-center rounded-lg border transition-colors',
+                          'flex size-11 items-center justify-center rounded-lg border transition-colors',
                           set.completed
                             ? 'bg-primary text-primary-foreground border-primary'
                             : 'text-muted-foreground hover:border-primary hover:text-primary'
@@ -565,7 +589,7 @@ export function SessionRunner({
                         type="button"
                         aria-label={`Remover série ${index + 1} de ${exercise.name}`}
                         onClick={() => removeSet(exercise.exerciseId, set.key)}
-                        className="text-muted-foreground hover:text-destructive flex size-7 items-center justify-center rounded-md"
+                        className="text-muted-foreground hover:text-destructive flex size-11 items-center justify-center rounded-md"
                       >
                         <X className="size-4" />
                       </button>
@@ -601,21 +625,23 @@ export function SessionRunner({
           </Button>
         )}
 
-        <div className="flex flex-wrap justify-between gap-3 pt-2">
+        <div className="bg-background fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-30 grid grid-cols-2 gap-2 border-t py-3 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:static md:flex md:flex-wrap md:justify-between md:gap-3 md:border-0 md:px-0 md:pt-2">
           <Button
             variant="outline"
             className="text-destructive"
             onClick={() => setCancelOpen(true)}
             disabled={busy !== null}
           >
-            <Trash2 /> Cancelar treino
+            <Trash2 /> <span className="md:hidden">Cancelar</span>
+            <span className="hidden md:inline">Cancelar treino</span>
           </Button>
           <Button
             size="lg"
             onClick={() => setFinishOpen(true)}
             disabled={done === 0 || busy !== null}
           >
-            <Check /> Finalizar treino
+            <Check /> <span className="md:hidden">Finalizar</span>
+            <span className="hidden md:inline">Finalizar treino</span>
           </Button>
         </div>
       </div>
@@ -674,10 +700,10 @@ export function SessionRunner({
               maxLength={2000}
               aria-label="Observações do treino"
               placeholder="Observações (opcional): como se sentiu, dores, ajustes…"
-              className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+              className="border-input bg-elevated placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
             />
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
                 variant="outline"
                 onClick={() => setFinishOpen(false)}

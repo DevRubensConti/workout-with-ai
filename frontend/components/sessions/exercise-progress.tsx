@@ -12,6 +12,32 @@ import {
 import { formatWeight } from '@/lib/workouts';
 
 export function ExerciseProgress({
+  collapsible = false,
+  ...props
+}: {
+  exerciseId: string;
+  currentWeightKg?: number | null;
+  collapsible?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!collapsible) return <ExerciseProgressContent {...props} />;
+  return (
+    <div className="space-y-3">
+      <Button
+        variant="outline"
+        className="w-full"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <TrendingUp />{' '}
+        {expanded ? 'Ocultar evolução' : 'Ver evolução e recordes'}
+      </Button>
+      {expanded && <ExerciseProgressContent {...props} />}
+    </div>
+  );
+}
+
+function ExerciseProgressContent({
   exerciseId,
   currentWeightKg,
 }: {
@@ -62,11 +88,10 @@ export function ExerciseProgress({
   return (
     <section
       aria-label="Evolução pessoal do exercício"
-      className="bg-card rounded-2xl border p-4"
+      className="bg-data-surface rounded-2xl border p-4"
     >
       <h3 className="flex items-center gap-2 text-sm font-semibold">
-        <TrendingUp className="text-primary size-4" /> Sua evolução neste
-        exercício
+        <TrendingUp className="text-data size-4" /> Sua evolução neste exercício
       </h3>
       {!current ? (
         <p role="status" className="text-muted-foreground mt-3 text-sm">
@@ -89,7 +114,7 @@ export function ExerciseProgress({
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm">
                 <Trophy className="text-primary mr-1 inline size-4" /> Recorde:{' '}
-                <strong>
+                <strong className="text-data">
                   {data.personal_record_kg === null
                     ? 'Sem carga registrada'
                     : formatWeight(data.personal_record_kg)}
@@ -110,7 +135,7 @@ export function ExerciseProgress({
                 currentWeightKg > data.personal_record_kg) && (
                 <p
                   role="status"
-                  className="bg-primary/10 text-primary mt-3 rounded-xl p-3 text-sm"
+                  className="bg-accent text-accent-foreground mt-3 rounded-xl p-3 text-sm"
                 >
                   Maior carga informada neste treino:{' '}
                   <strong>{formatWeight(currentWeightKg)}</strong>.
@@ -121,7 +146,7 @@ export function ExerciseProgress({
                 </p>
               )}
             {points.length > 0 && (
-              <figure className="bg-muted/30 mt-4 rounded-xl p-3">
+              <figure className="bg-card mt-4 rounded-xl p-3">
                 <svg
                   viewBox="0 0 300 105"
                   className="h-28 w-full"
@@ -141,7 +166,7 @@ export function ExerciseProgress({
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
-                    className="text-primary"
+                    className="text-data"
                   />
                   {coords.map((coord, index) => {
                     const [x, y] = coord.split(',');
@@ -152,7 +177,7 @@ export function ExerciseProgress({
                         cy={y}
                         r="3"
                         fill="currentColor"
-                        className="text-primary"
+                        className="text-data"
                       >
                         <title>
                           {formatProgressDate(points[index].performed_at)}:{' '}
@@ -206,7 +231,7 @@ export function ExerciseProgress({
               </details>
             )}
             {data.total_pages > 1 && (
-              <div className="mt-3 flex items-center justify-between gap-2">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <Button
                   size="sm"
                   variant="outline"

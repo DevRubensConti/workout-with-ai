@@ -123,6 +123,7 @@ export function TrainingProfileForm() {
                   id="training-age"
                   name="age"
                   type="number"
+                  inputMode="numeric"
                   min={18}
                   max={100}
                   step={1}
@@ -137,6 +138,7 @@ export function TrainingProfileForm() {
                   id="training-weight"
                   name="weight"
                   type="number"
+                  inputMode="decimal"
                   min={20}
                   max={400}
                   step="0.01"
@@ -151,6 +153,7 @@ export function TrainingProfileForm() {
                   id="training-height"
                   name="height"
                   type="number"
+                  inputMode="numeric"
                   min={100}
                   max={250}
                   step={1}
@@ -160,7 +163,7 @@ export function TrainingProfileForm() {
                 />
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Button type="submit" disabled={saving}>
                 {saving ? 'Salvando...' : 'Salvar perfil de treino'}
               </Button>

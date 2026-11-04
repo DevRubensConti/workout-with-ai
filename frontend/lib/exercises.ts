@@ -118,11 +118,11 @@ export const mechanicLabel = (value: string) => label(value, MECHANICS);
 export function levelBadgeClass(level: string | null) {
   switch (level) {
     case 'beginner':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+      return 'bg-accent text-accent-foreground';
     case 'intermediate':
-      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
+      return 'bg-data-surface text-data';
     case 'expert':
-      return 'bg-rose-500/15 text-rose-700 dark:text-rose-300';
+      return 'bg-data-secondary text-data-secondary-foreground';
     default:
       return 'bg-muted text-muted-foreground';
   }

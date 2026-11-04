@@ -20,9 +20,21 @@ export default async function AppLayout({
 
   return (
     <AuthProvider user={user}>
-      <div className="relative flex min-h-screen flex-col">
+      <div className="relative flex min-h-dvh min-w-0 flex-col pb-[var(--mobile-nav-height)] md:pb-0">
+        <a
+          href="#main-content"
+          className="bg-background focus-visible:ring-ring sr-only z-[60] rounded-md p-3 focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+        >
+          Pular para o conteúdo
+        </a>
         <Navbar navItems={navItems} />
-        <main className="flex-1">{children}</main>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 outline-none"
+        >
+          {children}
+        </main>
         <Footer />
       </div>
     </AuthProvider>

@@ -40,7 +40,7 @@ function PlanStats({ plan }: { plan: PlanSummary }) {
 
 function PlanBadges({ plan }: { plan: PlanSummary }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid w-full gap-2 min-[400px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap">
       {plan.goal && (
         <span className="bg-muted rounded-full px-2.5 py-1 text-xs font-medium">
           {plan.goal}
@@ -200,7 +200,7 @@ export function WorkoutList({ canWrite }: { canWrite: boolean }) {
               >
                 Treino atual
               </h2>
-              <div className="from-primary/15 via-card to-card rounded-2xl border bg-gradient-to-br p-6 shadow-sm">
+              <div className="from-primary/15 via-card to-card rounded-2xl border bg-gradient-to-br p-4 shadow-sm sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-3">
                     <h3 className="text-xl font-bold md:text-2xl">

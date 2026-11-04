@@ -5,63 +5,73 @@
 
 :root {
   --radius: 0.625rem;
+  --app-header-height: calc(4rem + env(safe-area-inset-top, 0px));
+  --mobile-nav-height: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 
-  --background: #f8f8f8;
-  --foreground: #141414;
+  /* Paleta de marca: valores compartilhados pelos dois temas. */
+  --palette-base: #0d0f0e;
+  --palette-graphite: #161a18;
+  --palette-elevated: #1f2421;
+  --palette-border: #2a312d;
+  --palette-lime: #c8ff3d;
+  --palette-lime-pressed: #b0e62e;
+  --palette-lime-soft: #232e10;
+  --palette-purple: #a585ff;
+  --palette-purple-deep: #7c5ce0;
+  --palette-purple-soft: #1f1830;
 
+  /* No tema claro, textos de destaque usam tons mais escuros para contraste. */
+  color-scheme: light;
+  --background: #f7f9f6;
+  --foreground: var(--palette-base);
   --card: #ffffff;
-  --card-foreground: #141414;
-
-  --popover: #ffffff;
-  --popover-foreground: #141414;
-
-  /* Cor de marca: troque aqui para re-tematizar o app inteiro */
-  --primary: #059669;
+  --card-foreground: var(--foreground);
+  --elevated: #edf1ec;
+  --popover: var(--elevated);
+  --popover-foreground: var(--foreground);
+  --primary: #486000;
   --primary-foreground: #ffffff;
-
-  --secondary: #eeeeee;
-  --secondary-foreground: #141414;
-
-  --muted: #eeeeee;
-  --muted-foreground: #555555;
-
-  --accent: #ecfdf5;
-  --accent-foreground: #065f46;
-
-  --destructive: #ef4444;
-
-  --border: #e0e0e0;
-  --input: #e0e0e0;
-  --ring: #34d399;
+  --action: var(--palette-lime);
+  --action-hover: var(--palette-lime-pressed);
+  --action-foreground: var(--palette-base);
+  --secondary: var(--elevated);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--elevated);
+  --muted-foreground: #566159;
+  --accent: #eaf3d7;
+  --accent-foreground: var(--primary);
+  --data: #6643bb;
+  --data-secondary: var(--palette-purple-deep);
+  --data-secondary-foreground: #ffffff;
+  --data-surface: #f1ebff;
+  --destructive: #b42335;
+  --destructive-foreground: #ffffff;
+  --warning: #805500;
+  --warning-surface: #fff4d6;
+  --border: #cad3ca;
+  --input: var(--border);
+  --ring: var(--primary);
+  --overlay: var(--palette-base);
+  --overlay-foreground: #f1f5f2;
 }
 
 .dark {
-  --background: #141414;
-  --foreground: #f8f8f8;
-
-  --card: #2b2b2b;
-  --card-foreground: #f8f8f8;
-
-  --popover: #2b2b2b;
-  --popover-foreground: #f8f8f8;
-
-  --primary: #10b981;
-  --primary-foreground: #052e22;
-
-  --secondary: #2b2b2b;
-  --secondary-foreground: #f8f8f8;
-
-  --muted: #2b2b2b;
-  --muted-foreground: #999999;
-
-  --accent: #2b2b2b;
-  --accent-foreground: #6ee7b7;
-
-  --destructive: #f87171;
-
-  --border: #3f3f3f;
-  --input: #3f3f3f;
-  --ring: #10b981;
+  color-scheme: dark;
+  --background: var(--palette-base);
+  --foreground: var(--overlay-foreground);
+  --card: var(--palette-graphite);
+  --elevated: var(--palette-elevated);
+  --primary: var(--palette-lime);
+  --primary-foreground: var(--palette-base);
+  --muted-foreground: #a5b0a8;
+  --accent: var(--palette-lime-soft);
+  --data: var(--palette-purple);
+  --data-surface: var(--palette-purple-soft);
+  --destructive: #ff8490;
+  --destructive-foreground: var(--palette-base);
+  --warning: #f2c66d;
+  --warning-surface: #302713;
+  --border: var(--palette-border);
 }
 
 @theme inline {
@@ -76,6 +86,14 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-action-foreground: var(--action-foreground);
+  --color-elevated: var(--elevated);
+  --color-data: var(--data);
+  --color-data-secondary: var(--data-secondary);
+  --color-data-secondary-foreground: var(--data-secondary-foreground);
+  --color-data-surface: var(--data-surface);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -83,6 +101,11 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-overlay: var(--overlay);
+  --color-overlay-foreground: var(--overlay-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -99,5 +122,105 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+  }
+  input,
+  select,
+  textarea {
+    accent-color: var(--primary);
+  }
+  select,
+  textarea {
+    background-color: var(--elevated);
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  p,
+  dd {
+    overflow-wrap: anywhere;
+  }
+  html {
+    scroll-padding-top: calc(var(--app-header-height) + 1rem);
+  }
+  fieldset {
+    min-inline-size: 0;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button,
+  a,
+  summary {
+    touch-action: manipulation;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+}
+
+:root [data-sonner-toaster][data-theme] {
+  --normal-bg: var(--popover);
+  --normal-bg-hover: var(--card);
+  --normal-text: var(--foreground);
+  --normal-border: var(--border);
+  --normal-border-hover: var(--ring);
+  --success-bg: var(--accent);
+  --success-text: var(--accent-foreground);
+  --success-border: var(--primary);
+  --info-bg: var(--data-surface);
+  --info-text: var(--data);
+  --info-border: var(--data);
+  --warning-bg: var(--warning-surface);
+  --warning-text: var(--warning);
+  --warning-border: var(--warning);
+  --error-bg: var(--popover);
+  --error-text: var(--destructive);
+  --error-border: var(--destructive);
+}
+
+:root [data-sonner-toast][data-styled='true'] [data-description] {
+  color: inherit;
+}
+
+@media (max-width: 767px) {
+  button,
+  [role='button'],
+  [role='menuitem'],
+  summary {
+    min-height: 44px;
+  }
+  button,
+  [role='button'] {
+    min-width: 44px;
+  }
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  [data-slot='dialog-content'] {
+    max-height: calc(
+      100dvh - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px) - 2rem
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
