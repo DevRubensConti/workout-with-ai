@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 
 from src.main import app
-from src.workouts.models import WorkoutSession, WorkoutSetLog
+from src.workouts.sessions.models import WorkoutSession, WorkoutSetLog
 from tests.test_workout_sessions_api import exercises, register  # noqa: F401
 
 

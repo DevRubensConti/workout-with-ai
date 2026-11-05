@@ -9,16 +9,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.auth.models import utcnow
-from src.workouts.models import (
-    Exercise,
+from src.workouts.exercises.models import Exercise
+from src.workouts.plans.models import (
     WorkoutDay,
     WorkoutDayExercise,
     WorkoutPlan,
-    WorkoutSession,
-    WorkoutSetLog,
 )
-from src.workouts.plan_service import localized_name
-from src.workouts.session_schemas import (
+from src.workouts.plans.service import localized_name
+from src.workouts.sessions.models import WorkoutSession, WorkoutSetLog
+from src.workouts.sessions.schemas import (
     ConsistencyAchievement,
     ConsistencyProgress,
     ExerciseProgress,

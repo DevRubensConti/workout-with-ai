@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.workouts.exercises.models import Exercise
 from src.workouts.generator import rules
 from src.workouts.generator.engine import (
     ExerciseInfo,
@@ -17,8 +18,7 @@ from src.workouts.generator.schemas import (
     WeeklyVolumeOut,
 )
 from src.workouts.generator.staples import all_source_ids
-from src.workouts.models import Exercise
-from src.workouts.plan_service import localized_name
+from src.workouts.plans.service import localized_name
 
 CATALOG_SOURCE = "free-exercise-db"
 NAME_LOCALE = "pt-BR"

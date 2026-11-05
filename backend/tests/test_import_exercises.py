@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from src.auth.models import User
 from src.scripts.import_exercises import SOURCE, import_catalog, load_catalog
-from src.workouts.models import Exercise, ExerciseTranslation
+from src.workouts.exercises.models import Exercise, ExerciseTranslation
 
 
 def record(source_id="Bench_Press"):

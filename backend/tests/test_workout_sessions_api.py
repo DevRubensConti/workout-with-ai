@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from src.auth.models import User
 from src.main import app
-from src.workouts.models import Exercise, ExerciseTranslation
+from src.workouts.exercises.models import Exercise, ExerciseTranslation
 
 
 def register(client, email="ana@example.com"):

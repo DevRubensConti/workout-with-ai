@@ -14,9 +14,10 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { ExerciseImage } from '@/components/exercises/exercise-image';
+import { ExerciseImageViewer } from '@/components/exercises/exercise-image-viewer';
 import { ActiveSessionBanner } from '@/components/sessions/active-session-banner';
 import { GenerationPanel } from '@/components/workouts/generation-panel';
+import { ExerciseReplacement } from '@/components/workouts/exercise-replacement';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch } from '@/lib/api';
 import {
@@ -53,17 +54,24 @@ function Chip({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ExerciseRow({ item, index }: { item: PlanExercise; index: number }) {
+function ExerciseRow({
+  item,
+  index,
+  replacement,
+}: {
+  item: PlanExercise;
+  index: number;
+  replacement?: React.ReactNode;
+}) {
   return (
     <li className="bg-card flex gap-3 rounded-xl border p-3 md:gap-4 md:p-4">
       <div className="bg-muted relative h-16 w-16 shrink-0 overflow-hidden rounded-lg sm:h-20 sm:w-28">
-        <ExerciseImage
-          key={item.images[0] ?? 'empty'}
-          path={item.images[0]}
+        <ExerciseImageViewer
+          images={item.images}
           alt={item.exercise_name}
           sizes="112px"
         />
-        <span className="bg-overlay/70 text-overlay-foreground absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded-full text-xs font-semibold">
+        <span className="bg-overlay/70 text-overlay-foreground pointer-events-none absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded-full text-xs font-semibold">
           {index + 1}
         </span>
       </div>
@@ -90,6 +98,7 @@ function ExerciseRow({ item, index }: { item: PlanExercise; index: number }) {
         {item.notes && (
           <p className="text-muted-foreground text-sm italic">{item.notes}</p>
         )}
+        {replacement}
       </div>
     </li>
   );
@@ -376,7 +385,31 @@ export function WorkoutDetail({
         ) : (
           <ol className="space-y-3">
             {day.exercises.map((item, index) => (
-              <ExerciseRow key={item.id} item={item} index={index} />
+              <ExerciseRow
+                key={item.id}
+                item={item}
+                index={index}
+                replacement={
+                  canWrite && (
+                    <ExerciseReplacement
+                      mode="plan"
+                      name={item.exercise_name}
+                      disabled={starting || pending !== null}
+                      getContext={() => ({
+                        mode: 'plan',
+                        plan_id: plan.id,
+                        day_id: day.id,
+                        row_id: item.id,
+                      })}
+                      onApplied={(_, result) => {
+                        if (result?.plan)
+                          setState({ key: retry, plan: result.plan });
+                        toast.success('Exercício trocado neste dia do plano.');
+                      }}
+                    />
+                  )
+                }
+              />
             ))}
           </ol>
         )}

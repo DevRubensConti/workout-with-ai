@@ -3,11 +3,11 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from src import workouts  # noqa: F401  (registra os models de todos os domínios)
 from src.auth import models  # noqa: F401  (registra os models no metadata)
 from src.config import get_settings
 from src.database import Base
 from src.social import models as social_models  # noqa: F401
-from src.workouts import models as workouts_models  # noqa: F401
 
 config = context.config
 

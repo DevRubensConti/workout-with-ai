@@ -33,6 +33,12 @@ export const NAVIGATION_MENU: NavItem[] = [
     href: '/history',
     permissions: ['workouts:read'],
   },
+  {
+    id: 'biomechanical-scale',
+    label: 'Critérios',
+    href: '/admin/biomechanical-scale',
+    permissions: ['exercises:manage'],
+  },
 ];
 
 export function getAllowedRoutes(

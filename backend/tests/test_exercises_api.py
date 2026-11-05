@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from src.auth.models import User
-from src.workouts.models import Exercise, ExerciseTranslation
+from src.workouts.exercises.models import Exercise, ExerciseTranslation
 
 
 def register(client):

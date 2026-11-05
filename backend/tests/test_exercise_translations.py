@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from src.workouts.models import Exercise, ExerciseTranslation
+from src.workouts.exercises.models import Exercise, ExerciseTranslation
 
 
 def exercise():

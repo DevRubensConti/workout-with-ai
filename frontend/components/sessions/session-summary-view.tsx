@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ConsistencyProgress } from '@/components/sessions/consistency-progress';
 import { ExerciseProgress } from '@/components/sessions/exercise-progress';
-import { ExerciseImage } from '@/components/exercises/exercise-image';
+import { ExerciseImageViewer } from '@/components/exercises/exercise-image-viewer';
 import { Button } from '@/components/ui/button';
 import { ApiError, apiFetch } from '@/lib/api';
 import { muscleLabel } from '@/lib/exercises';
@@ -143,10 +143,9 @@ export function SessionSummaryView({
           >
             <div className="flex items-center gap-3">
               <span className="bg-muted relative h-12 w-16 shrink-0 overflow-hidden rounded-md">
-                <ExerciseImage
-                  key={exercise.images[0] ?? 'empty'}
-                  path={exercise.images[0]}
-                  alt=""
+                <ExerciseImageViewer
+                  images={exercise.images}
+                  alt={exercise.name}
                   sizes="64px"
                 />
               </span>

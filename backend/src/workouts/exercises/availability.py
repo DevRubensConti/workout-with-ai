@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from src.workouts.models import DisabledExercise, Exercise
+from src.workouts.exercises.models import DisabledExercise, Exercise
 
 
 def visible_exercises(user_id: UUID):

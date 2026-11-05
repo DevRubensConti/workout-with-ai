@@ -2,6 +2,8 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import Link from 'next/link';
+import { useAuth } from '@/components/auth-provider';
 
 import { ExerciseImage } from '@/components/exercises/exercise-image';
 import {
@@ -94,6 +96,7 @@ function DetailBody({
   onPrevious,
   onNext,
 }: DetailBodyProps) {
+  const user = useAuth();
   const [activeImage, setActiveImage] = useState(0);
   const images = exercise.images;
   const infoRows = detail
@@ -144,6 +147,14 @@ function DetailBody({
       </div>
 
       <div className="flex flex-col gap-5 p-5 md:p-7">
+        {user.permissions.includes('exercises:manage') && (
+          <Link
+            href={`/admin/biomechanical-assessments?exercise_id=${exercise.id}`}
+            className="text-primary text-sm underline"
+          >
+            Consultar avaliações biomecânicas
+          </Link>
+        )}
         <header className="space-y-3 pr-10">
           <DialogTitle>{exercise.name}</DialogTitle>
           <DialogDescription asChild>

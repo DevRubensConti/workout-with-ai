@@ -98,10 +98,214 @@ Somente alterar `SameSite` nao resolve a ausencia do cookie no frontend.
 
 - `backend/src/auth/`: models, schemas, service, router, `require_permissions(...)`
 - `backend/src/auth/permissions.py`: papéis (`user`, `admin`) e permissões
+- `backend/src/workouts/exercises/`: catálogo, traduções, efeitos musculares e disponibilidade
+- `backend/src/workouts/plans/`: planos, dias e prescrições de exercícios
+- `backend/src/workouts/sessions/`: execução, séries, evolução e histórico
+- `backend/src/workouts/biomechanics/`: versões dos critérios de demanda regional
+- `backend/src/workouts/generator/`: geração de treinos por regras e IA
+- `backend/src/workouts/common.py`: timestamps compartilhados pelos modelos
+- Cada domínio mantém seus próprios models, schemas, router e service quando necessários.
+  `backend/src/workouts/__init__.py` registra os modelos para resolver relacionamentos
+  entre domínios, inclusive nas migrações e nos testes. A separação não altera URLs
+  nem as tabelas existentes.
 - `frontend/proxy.ts`: barreira de rotas (JWT válido ou redireciona ao /login)
 - `frontend/app/(auth)/`: login, cadastro, recuperação de senha
 - `frontend/app/(app)/`: área logada (home, conta); o layout valida o usuário na API
 - `frontend/lib/navigation.ts`: menu por permissão. Novas páginas entram aqui.
+
+## Imagens durante o treino e na consulta
+
+Toque na miniatura de um exercício na consulta do treino, durante a execução
+ou no histórico para abrir a galeria. No celular, ela ocupa a tela inteira,
+sem cortar a imagem. Use as setas para alternar entre as posições e os
+controles de zoom (100% a 300%) para ver detalhes; com zoom, arraste para
+explorar a imagem. Toque na porcentagem para redefinir o zoom e em Fechar
+para voltar ao treino sem alterar as séries.
+
+## Trocar exercício com comparação por IA
+
+O botão **Trocar exercício** está disponível na prévia/edição do treino,
+na consulta do plano salvo e durante a execução. Após autorizar a consulta,
+o backend escolhe até três exercícios habilitados e acessíveis ao usuário,
+com o mesmo conjunto de `primary_muscles` (independentemente da ordem),
+`equipment` e `level`. Exercícios já presentes no mesmo dia ou na sessão
+não são repetidos. Sem músculos primários cadastrados, não há sugestões.
+Entre os candidatos equivalentes, têm preferência os de mesma mecânica,
+força e categoria e maior sobreposição de músculos secundários.
+
+O Gemini recebe o catálogo desses candidatos, o exercício original e a
+prescrição do treino atual, e retorna um pró e um contra por troca.
+Não recebe perfil pessoal, cargas, nomes livres do plano ou notas.
+São usadas as configurações existentes `GEMINI_API_KEY`, `GEMINI_MODEL`,
+`GEMINI_TIMEOUT_SECONDS`, `GEMINI_MAX_OUTPUT_TOKENS` e
+`GEMINI_PERSONAL_DATA_ENABLED`. Sem IA configurada ou com resposta inválida,
+a interface informa o erro e nenhuma substituição é feita automaticamente.
+Se houver menos de três opções exatas, mostra as disponíveis; sem opções,
+não faz requisição ao Gemini. A comparação é uma sugestão, não uma avaliação
+clínica ou garantia de equivalência.
+
+- No rascunho, a troca só é persistida ao salvar o treino.
+- No plano salvo, muda somente a ocorrência selecionada naquele dia.
+- Durante a sessão, salva primeiro as edições das séries, preserva as séries
+  concluídas no exercício original e transfere somente as restantes para
+  o substituto. Atualiza também a ocorrência no plano, para os próximos treinos.
+- Séries, repetições e descanso são mantidos; carga, ritmo e notas específicos
+  do exercício são limpos para revisão. Nenhuma carga é transferida automaticamente.
+- Se todas as séries estiverem concluídas, a troca fica indisponível.
+  Dias em andamento devem ser alterados pela tela da sessão, não pela consulta.
+  Se o plano original foi excluído, a troca permanente não pode ser aplicada.
+- A aplicação revalida o catálogo e o snapshot do treino; alterações detectadas
+  desde a comparação exigem novas sugestões, sem gravar uma troca desatualizada.
+
+Endpoints autenticados com `workouts:write`:
+`POST /workouts/replacements/suggest` e `POST /workouts/replacements/apply`.
+O primeiro exige `ai_consent: true` e aceita contexto de rascunho, plano ou
+sessão. O segundo aceita plano/sessão, o candidato e a revisão retornada.
+
+## Critérios de demanda biomecânica
+
+Após `cd backend` e `uv run alembic upgrade head`, a migração `0012` cria
+`biomechanical_scale_versions` e insere a formalização inicial da escala 0–5:
+cinco regiões, três tipos de participação, condições de referência, critérios,
+regras de revisão e orientação para regiões não avaliadas.
+
+Administradores com `exercises:manage` acessam **Critérios** no menu, em
+`/admin/biomechanical-scale`. Nomes e descrições são editáveis; os códigos
+das regiões, os tipos de participação e o intervalo 0–5 permanecem fixos.
+Cada salvamento exige um motivo e cria um snapshot JSON completo em uma
+nova linha, com versão, autor e data. A aplicação não oferece atualização
+ou exclusão de versões anteriores; o histórico é consultável, somente leitura.
+O maior número de versão identifica os critérios atuais. Edições concorrentes
+retornam conflito (409), sem sobrescrever dados; o administrador deve
+recarregar e reconciliar suas alterações.
+
+A definição reside no banco, não em prompts ou constantes de execução.
+O conteúdo inicial da migração é apenas um registro histórico de inicialização.
+`GET /biomechanical-scales/current` fornece a definição atual a usuários com
+`workouts:read`. O histórico paginado, a consulta por versão e a criação
+(`GET /biomechanical-scales`, `GET /biomechanical-scales/{version}`,
+`POST /biomechanical-scales`) exigem `exercises:manage`.
+
+As avaliações referenciam a versão usada, sem reinterpretar
+dados antigos com critérios novos. A escala é ordinal, interna e não
+clinicamente validada: não representa probabilidade de lesão e requer
+revisão profissional antes de orientar decisões de treino. Regiões sem
+avaliação devem manter nota ausente, nunca assumir zero.
+
+### Avaliações por exercício: cadastro externo e revisão administrativa
+
+A migração `0013` cria três tabelas **vazias**, sem cadastrar avaliações:
+
+- `exercise_biomechanical_assessments`: cabeçalho com `id` UUID (gerado pelo
+  cadastrador externo), `exercise_id`, `scale_version`, `assessment_method`
+  (`manual`, `ai` ou `rule`), `assessment_source` (obrigatório, até 500 caracteres),
+  `execution_context` (obrigatório), `created_by` opcional e `created_at`
+  (preenchido pelo banco). `supersedes_id` é opcional e referencia uma avaliação
+  anterior **do mesmo exercício**, para identificar correções.
+- `exercise_region_demands`: cinco linhas por avaliação, com chave composta
+  (`assessment_id`, `region_code`). Regiões: `shoulder`, `lumbar_spine`,
+  `cervical_spine`, `knee`, `elbow`. Cada linha exige `justification`.
+  Quando `assessment_status = 'assessed'`, informe `demand_score` inteiro de 0 a 5
+  e `demand_role` (`direct`, `secondary` ou `stabilizing`).
+  Quando `assessment_status = 'unassessed'`, nota e participação devem ser
+  `NULL`; a justificativa explica a insuficiência de informação. Nota 0
+  representa uma avaliação explícita, não ausência de informação.
+- `biomechanical_assessment_reviews`: decisão única por avaliação, registrada
+  pelo fluxo administrativo, com `decision` (`reviewed` ou `rejected`), `notes`,
+  `reviewed_by` e `reviewed_at`. **Não preencha esta tabela na importação.**
+  Ausência de revisão significa pendente; não há coluna de status no cabeçalho.
+
+No PostgreSQL, faça cada cadastro em uma **única transação**: insira o cabeçalho,
+as cinco regiões e só então confirme com `COMMIT`. Os gatilhos diferidos
+rejeitam transações com regiões faltantes. As FKs exigem exercício e versão
+da escala existentes. As tabelas usam RLS, seguindo o padrão do projeto:
+importações externas precisam de uma conexão de backend autorizada,
+nunca de acesso público pelo navegador.
+
+O fluxo administra apenas exercícios **globais** (`exercises.owner_user_id IS NULL`);
+não importe dados de exercícios particulares para este catálogo compartilhado.
+Depois de uma decisão, o PostgreSQL bloqueia alterações nos dados e na revisão.
+Correções exigem uma nova avaliação, preservando a anterior. Exclusões de
+usuários apenas removem as referências de autoria, mantendo o histórico.
+Exercícios e versões referenciados não podem ser excluídos.
+
+Acesse `/admin/biomechanical-assessments` pelo link na página **Critérios**
+ou pelo detalhe do exercício. Apenas administradores com `exercises:manage`
+podem listar, buscar, consultar o histórico por exercício e registrar revisão.
+A consulta mostra as cinco regiões, origem, contexto, a **escala histórica**
+utilizada e um aviso caso os critérios atuais sejam diferentes.
+
+No topo, os totais consideram todo o catálogo global, independentemente dos
+filtros e da paginação. Um exercício é validado apenas quando sua avaliação
+mais recente está revisada; pendentes, rejeitados e exercícios sem avaliação
+entram como não validados. Cada exercício é contado uma única vez. A avaliação
+mais recente é determinada por data de cadastro e, em caso de empate, pelo
+maior identificador, na mesma ordem da listagem.
+A lista mantém o histórico de avaliações e exibe uma prévia das cinco notas,
+com os nomes das regiões da escala histórica. Nota zero, região não avaliada
+e registro ausente são apresentados de forma distinta. Após uma revisão,
+os totais e a lista são recarregados.
+Após revisões e correções, os dados são atualizados em segundo plano, mantendo
+a lista visível e preservando os filtros e a página atual. Falhas na atualização
+são exibidas sem apagar os dados já carregados.
+A listagem permite combinar categoria (por exemplo, Alongamento), grupo
+muscular, busca e status da revisão. As opções vêm do catálogo global;
+os filtros são aplicados antes da paginação e não alteram os totais globais.
+A API aceita `category` e `muscle_group` e retorna as opções em `filters`.
+As miniaturas na lista e a imagem na consulta abrem a galeria ampliada, com
+as posições disponíveis. **Consultar avaliação** expande os detalhes logo abaixo
+do exercício selecionado, com as notas e participações diretamente editáveis,
+sem um resumo duplicado nem um botão intermediário para editar.
+O mesmo botão fecha a consulta. Alterações precisam ser salvas ou descartadas
+antes de registrar a revisão; sem alterações, a revisão permanece disponível.
+
+A revisão exige decisão e não altera as notas da original. A justificativa
+da revisão é opcional.
+**Alterar notas** permite ajustar nota, participação e justificativa de cada
+região; justificativas por região e motivo da alteração são opcionais.
+O salvamento cria uma nova avaliação **manual,
+pendente**, ligada à anterior por `supersedes_id`, preservando o conteúdo original.
+Se a anterior estiver pendente, ela é rejeitada automaticamente na mesma
+transação, com motivo e autor registrados. Decisões já existentes não são
+alteradas. A regra vale para novas correções, sem alterar retroativamente o histórico.
+Mantém a escala histórica e o contexto de execução, registra o autor
+e exige as cinco regiões válidas; não cria um novo exercício.
+Somente a avaliação mais recente pode originar uma correção. Mudanças no
+conteúdo desde a consulta e tentativas duplicadas retornam conflito (409).
+Uma nova avaliação pendente retira o exercício da contagem de validados até
+ser revisada. O cadastro inicial continua sendo feito externamente.
+Execute `cd backend` e `uv run alembic upgrade head` para aplicar a migração
+`0014`, que permite justificativas e notas de revisão vazias no banco.
+Os campos permanecem na tela, mas podem ficar em branco ou ser omitidos
+na API. Notas, participação, integridade das cinco regiões e controle de
+concorrência continuam validados. O downgrade para `0013` exige resolver
+textos vazios previamente; não preenche justificativas fictícias.
+"Revisada" significa dados conferidos, não aprovação clínica do
+exercício. Uma região pode continuar explicitamente não avaliada.
+Se uma importação alterar dados pendentes desde a consulta, a API retorna
+409 e exige recarregar antes de decidir. Duas revisões concorrentes não
+sobrescrevem a decisão registrada.
+
+Endpoints administrativos:
+
+- `GET /biomechanical-assessments`: paginação (`page`, `page_size` até 100),
+  filtros `q` (nome/código de origem), `exercise_id` e `review_status`
+  (`pending`, `reviewed`, `rejected`).
+  Retorna também `region_scores` em cada item e os totais globais em `counts`
+  (`total_exercises`, `validated_exercises`, `unvalidated_exercises`).
+- `POST /biomechanical-assessments/{id}/corrections`: cria nova avaliação
+  pendente (201), com `content_hash`, `reason` e `regions` completos.
+  Lista e detalhe também retornam as imagens do exercício em `images`.
+- `GET /biomechanical-assessments/{id}`: detalhe, histórico da escala e
+  `content_hash` do conteúdo consultado.
+- `POST /biomechanical-assessments/{id}/review`: corpo com `decision`, `notes`
+  e o `content_hash` devolvido na consulta.
+
+Não há endpoint de criação, atualização ou exclusão de avaliações, nem
+preenchimento por IA nesta entrega. A geração de treinos não utiliza essas notas.
+Nos testes SQLite, os CHECKs/FKs são mantidos e a API impede marcar dados
+incompletos como revisados; os gatilhos de integridade entre linhas e
+imutabilidade são específicos do PostgreSQL.
 
 ## Interface no celular
 

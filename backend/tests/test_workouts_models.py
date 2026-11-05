@@ -6,16 +6,17 @@ from sqlalchemy.exc import IntegrityError
 
 from src.auth.models import User
 from src.auth.permissions import ROLE_ADMIN, ROLE_USER, permissions_for_role
-from src.workouts.models import (
+from src.workouts.exercises.models import (
     Exercise,
     ExerciseMuscleEffect,
     MuscleTarget,
+)
+from src.workouts.plans.models import (
     WorkoutDay,
     WorkoutDayExercise,
     WorkoutPlan,
-    WorkoutSession,
-    WorkoutSetLog,
 )
+from src.workouts.sessions.models import WorkoutSession, WorkoutSetLog
 
 
 @pytest.fixture()

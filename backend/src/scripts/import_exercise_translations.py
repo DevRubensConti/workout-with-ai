@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from src.database import SessionLocal
 from src.scripts.import_exercises import SOURCE, CatalogExercise, load_catalog, validate_identifiers
-from src.workouts.models import Exercise, ExerciseTranslation
+from src.workouts.exercises.models import Exercise, ExerciseTranslation
 
 LOCALE = "pt-BR"
 

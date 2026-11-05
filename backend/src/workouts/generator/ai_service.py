@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from src.auth.models import TrainingProfile, User, utcnow
 from src.config import get_settings
-from src.workouts.availability import enabled_exercises, visible_exercises
+from src.workouts.exercises.availability import enabled_exercises, visible_exercises
+from src.workouts.exercises.models import Exercise
 from src.workouts.generator import rules
 from src.workouts.generator.schemas import (
     AiGenerateIn,
@@ -28,8 +29,7 @@ from src.workouts.generator.schemas import (
 )
 from src.workouts.generator.splits import get_split
 from src.workouts.generator.staples import SLOTS
-from src.workouts.models import Exercise
-from src.workouts.plan_service import localized_name
+from src.workouts.plans.service import localized_name
 
 PROMPT_VERSION = "gemini-training-v4-catalog-indices"
 MAX_RESPONSE_BYTES = 512_000
@@ -244,14 +244,43 @@ def _call_gemini(context: dict) -> AiPlan:
             for index, item in enumerate(context["catalog"])
         ],
     }
+    decoded = request_gemini_json(
+        SYSTEM_INSTRUCTION, wire_context, _gemini_response_schema(len(exercise_ids))
+    )
+    decoded = _resolve_exercise_indices(decoded, exercise_ids)
+    try:
+        return AiPlan.model_validate(decoded)
+    except ValidationError as error:
+        fields = (
+            AiPlan.model_fields.keys() | AiDay.model_fields.keys() | AiExercise.model_fields.keys()
+        )
+        invalid_fields = sorted(
+            {
+                field
+                for issue in error.errors(include_input=False, include_url=False)
+                for field in issue["loc"]
+                if isinstance(field, str) and field in fields
+            }
+        )
+        logger.warning(
+            "Schema Gemini invalido. campos={} erros={}", invalid_fields, error.error_count()
+        )
+        raise _invalid_response("schema_validation") from None
+
+
+def request_gemini_json(instruction: str, context: dict, schema: dict) -> object:
+    settings = get_settings()
+    key = settings.GEMINI_API_KEY
+    if not settings.GEMINI_PERSONAL_DATA_ENABLED or not key or not key.get_secret_value().strip():
+        raise AiUnavailableError("A geração por IA ainda não foi configurada no servidor.")
     payload = {
-        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+        "systemInstruction": {"parts": [{"text": instruction}]},
         "contents": [
-            {"role": "user", "parts": [{"text": json.dumps(wire_context, ensure_ascii=False)}]}
+            {"role": "user", "parts": [{"text": json.dumps(context, ensure_ascii=False)}]}
         ],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "responseJsonSchema": _gemini_response_schema(len(exercise_ids)),
+            "responseJsonSchema": schema,
             "maxOutputTokens": settings.GEMINI_MAX_OUTPUT_TOKENS,
         },
     }
@@ -309,28 +338,8 @@ def _call_gemini(context: dict) -> AiPlan:
     except (ValueError, KeyError, TypeError, AttributeError):
         raise _invalid_response("response_envelope") from None
     try:
-        decoded = json.loads(text)
+        return json.loads(text)
     except ValueError:
-        raise _invalid_response("schema_validation") from None
-    decoded = _resolve_exercise_indices(decoded, exercise_ids)
-    try:
-        return AiPlan.model_validate(decoded)
-    except ValidationError as error:
-        # Nao registrar input, mensagens ou caminhos arbitrarios vindos da resposta.
-        fields = (
-            AiPlan.model_fields.keys() | AiDay.model_fields.keys() | AiExercise.model_fields.keys()
-        )
-        invalid_fields = sorted(
-            {
-                field
-                for issue in error.errors(include_input=False, include_url=False)
-                for field in issue["loc"]
-                if isinstance(field, str) and field in fields
-            }
-        )
-        logger.warning(
-            "Schema Gemini invalido. campos={} erros={}", invalid_fields, error.error_count()
-        )
         raise _invalid_response("schema_validation") from None
 
 

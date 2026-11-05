@@ -416,4 +416,181 @@ UPDATE alembic_version SET version_num='0010' WHERE version_num = '0009';
 ALTER TABLE users ADD COLUMN rest_timer_enabled BOOLEAN DEFAULT false NOT NULL;
 UPDATE alembic_version SET version_num='0011' WHERE version_num = '0010';
 
+-- Running upgrade 0011 -> 0012
+CREATE TABLE biomechanical_scale_versions (
+    version INTEGER NOT NULL PRIMARY KEY,
+    definition JSON NOT NULL,
+    change_reason VARCHAR(1000) NOT NULL,
+    created_by UUID REFERENCES users (id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT ck_biomechanical_scale_version CHECK (version > 0),
+    CONSTRAINT ck_biomechanical_scale_reason CHECK (length(trim(change_reason)) > 0)
+);
+
+INSERT INTO biomechanical_scale_versions (version, definition, change_reason, created_by) VALUES (1, '{"title": "Escala de Demanda Biomecânica Regional", "disclaimer": "Classificação interna e ordinal da exigência mecânica estimada, não da probabilidade de lesão. Não é uma escala clínica validada. Nota alta não significa contraindicação e nota baixa não garante segurança. A classificação inicial requer revisão profissional.", "reference_conditions": "Avaliar a variação específica, equipamento, apoios e amplitude descritos no cadastro. Considerar técnica controlada conforme as instruções, sem pressupor carga máxima, fadiga extrema ou execução inadequada. A carga real, o volume, a recuperação e as condições individuais devem ser considerados separadamente.", "evaluation_criteria": "Justificar a nota considerando: movimento resistido; sustentação e transmissão de carga; exigência de estabilização; apoios e alavancas; amplitude e posição. Esses fatores orientam a avaliação, mas não devem ser somados automaticamente. Comparar variações semelhantes sob as mesmas condições de referência.", "consistency_rules": "Não copiar notas apenas pelo grupo muscular. Participação estabilizadora pode ter demanda alta. Não converter notas em percentuais de risco, nem somar regiões para produzir risco total. Notas 4 e 5 exigem justificativa biomecânica explícita; nota 5 exige revisão profissional. Sugestões da IA permanecem pendentes até revisão humana. Registrar a versão dos critérios, a origem e a justificativa de cada avaliação.", "unassessed_guidance": "Informação insuficiente significa não avaliado: nota NULL e motivo registrado. Não inventar notas, não assumir zero e não tratar ausência de avaliação como segurança. Nota zero só pode resultar de avaliação explícita.", "regions": [{"code": "shoulder", "label": "Ombros", "description": "Demanda mecânica na região dos ombros."}, {"code": "lumbar_spine", "label": "Coluna lombar", "description": "Demanda mecânica na região lombar, incluindo estabilização do tronco."}, {"code": "cervical_spine", "label": "Coluna cervical", "description": "Demanda mecânica na região cervical, incluindo sustentação e estabilização."}, {"code": "knee", "label": "Joelhos", "description": "Demanda mecânica na região dos joelhos."}, {"code": "elbow", "label": "Cotovelos", "description": "Demanda mecânica na região dos cotovelos."}], "roles": [{"code": "direct", "label": "Direta", "description": "Região envolvida no movimento resistido principal."}, {"code": "secondary", "label": "Secundária", "description": "Região que participa de movimentos associados."}, {"code": "stabilizing", "label": "Estabilizadora", "description": "Região que mantém posição e alinhamento; pode receber nota alta."}], "scores": [{"score": 0, "label": "Desprezível", "description": "Sem participação mecânica relevante na execução descrita. Exige avaliação explícita e nunca deve ser usada como valor padrão."}, {"score": 1, "label": "Baixa", "description": "Participação discreta, com pouca exigência de movimento ou estabilização regional."}, {"score": 2, "label": "Moderada", "description": "Participação perceptível no movimento ou na estabilização, sem ser uma das principais regiões mecanicamente exigidas."}, {"score": 3, "label": "Relevante", "description": "Sustenta ou transmite resistência de forma importante; sua demanda deve ser considerada na organização do treino."}, {"score": 4, "label": "Alta", "description": "Entre as principais regiões exigidas, por movimento resistido ou estabilização substancial. Exige justificativa biomecânica explícita."}, {"score": 5, "label": "Muito alta", "description": "Demanda especialmente acentuada na variação descrita, em comparação com alternativas semelhantes. Uso excepcional, com justificativa detalhada e revisão profissional."}]}', 'Formalização inicial; critérios sujeitos a revisão profissional.', NULL);
+
+ALTER TABLE biomechanical_scale_versions ENABLE ROW LEVEL SECURITY;
+UPDATE alembic_version SET version_num='0012' WHERE version_num = '0011';
+
+-- Running upgrade 0012 -> 0013
+CREATE TABLE exercise_biomechanical_assessments (
+    id UUID NOT NULL PRIMARY KEY,
+    exercise_id UUID NOT NULL REFERENCES exercises (id) ON DELETE RESTRICT,
+    scale_version INTEGER NOT NULL REFERENCES biomechanical_scale_versions (version) ON DELETE RESTRICT,
+    supersedes_id UUID,
+    assessment_method VARCHAR(10) NOT NULL,
+    assessment_source VARCHAR(500) NOT NULL,
+    execution_context TEXT NOT NULL,
+    created_by UUID REFERENCES users (id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT uq_biomechanical_assessment_exercise UNIQUE (id, exercise_id),
+    CONSTRAINT fk_biomechanical_assessment_predecessor FOREIGN KEY (supersedes_id, exercise_id)
+        REFERENCES exercise_biomechanical_assessments (id, exercise_id) ON DELETE RESTRICT,
+    CONSTRAINT ck_biomechanical_assessment_predecessor CHECK (supersedes_id IS NULL OR supersedes_id != id),
+    CONSTRAINT ck_biomechanical_assessment_method CHECK (assessment_method IN ('manual', 'ai', 'rule')),
+    CONSTRAINT ck_biomechanical_assessment_source CHECK (length(trim(assessment_source)) > 0),
+    CONSTRAINT ck_biomechanical_assessment_context CHECK (length(trim(execution_context)) > 0)
+);
+
+CREATE INDEX ix_biomechanical_assessment_exercise_created ON exercise_biomechanical_assessments (exercise_id, created_at);
+CREATE INDEX ix_biomechanical_assessment_scale ON exercise_biomechanical_assessments (scale_version);
+
+CREATE TABLE exercise_region_demands (
+    assessment_id UUID NOT NULL REFERENCES exercise_biomechanical_assessments (id) ON DELETE CASCADE,
+    region_code VARCHAR(30) NOT NULL,
+    assessment_status VARCHAR(15) NOT NULL,
+    demand_score INTEGER,
+    demand_role VARCHAR(20),
+    justification TEXT NOT NULL,
+    PRIMARY KEY (assessment_id, region_code),
+    CONSTRAINT ck_exercise_region_demand_region CHECK (region_code IN ('shoulder', 'lumbar_spine', 'cervical_spine', 'knee', 'elbow')),
+    CONSTRAINT ck_exercise_region_demand_result CHECK (
+        (assessment_status = 'assessed' AND demand_score IS NOT NULL AND demand_score BETWEEN 0 AND 5
+         AND demand_role IS NOT NULL AND demand_role IN ('direct', 'secondary', 'stabilizing'))
+        OR (assessment_status = 'unassessed' AND demand_score IS NULL AND demand_role IS NULL)
+    ),
+    CONSTRAINT ck_exercise_region_demand_reason CHECK (length(trim(justification)) > 0)
+);
+
+CREATE TABLE biomechanical_assessment_reviews (
+    assessment_id UUID NOT NULL PRIMARY KEY REFERENCES exercise_biomechanical_assessments (id) ON DELETE RESTRICT,
+    decision VARCHAR(15) NOT NULL,
+    notes TEXT NOT NULL,
+    reviewed_by UUID REFERENCES users (id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    CONSTRAINT ck_biomechanical_review_decision CHECK (decision IN ('reviewed', 'rejected')),
+    CONSTRAINT ck_biomechanical_review_notes CHECK (length(trim(notes)) > 0)
+);
+
+ALTER TABLE exercise_biomechanical_assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exercise_region_demands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE biomechanical_assessment_reviews ENABLE ROW LEVEL SECURITY;
+
+CREATE FUNCTION check_biomechanical_assessment_regions() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE target_id uuid;
+BEGIN
+    IF TG_TABLE_NAME = 'exercise_biomechanical_assessments' THEN
+        target_id := NEW.id;
+    ELSIF TG_OP = 'DELETE' THEN
+        target_id := OLD.assessment_id;
+    ELSE
+        target_id := NEW.assessment_id;
+    END IF;
+    IF EXISTS (SELECT 1 FROM exercise_biomechanical_assessments WHERE id = target_id)
+       AND (SELECT count(*) FROM exercise_region_demands WHERE assessment_id = target_id) != 5 THEN
+        RAISE EXCEPTION 'A biomechanical assessment must contain exactly five regions';
+    END IF;
+    IF TG_OP = 'UPDATE' AND TG_TABLE_NAME = 'exercise_region_demands' THEN
+        IF OLD.assessment_id != NEW.assessment_id
+           AND EXISTS (SELECT 1 FROM exercise_biomechanical_assessments WHERE id = OLD.assessment_id)
+           AND (SELECT count(*) FROM exercise_region_demands WHERE assessment_id = OLD.assessment_id) != 5 THEN
+            RAISE EXCEPTION 'The original assessment must retain five regions';
+        END IF;
+    END IF;
+    RETURN NULL;
+END $$;
+
+CREATE CONSTRAINT TRIGGER exercise_biomechanical_assessments_complete
+AFTER INSERT OR UPDATE ON exercise_biomechanical_assessments
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+EXECUTE FUNCTION check_biomechanical_assessment_regions();
+
+CREATE CONSTRAINT TRIGGER exercise_region_demands_complete
+AFTER INSERT OR UPDATE OR DELETE ON exercise_region_demands
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+EXECUTE FUNCTION check_biomechanical_assessment_regions();
+
+CREATE FUNCTION guard_biomechanical_assessment() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM biomechanical_assessment_reviews WHERE assessment_id = OLD.id) THEN
+        IF TG_OP = 'UPDATE' THEN
+            IF NEW.created_by IS NULL AND OLD.created_by IS NOT NULL
+               AND (to_jsonb(NEW) - 'created_by') = (to_jsonb(OLD) - 'created_by') THEN
+                RETURN NEW;
+            END IF;
+        END IF;
+        RAISE EXCEPTION 'Reviewed assessments are immutable; create a new assessment';
+    END IF;
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER biomechanical_assessment_immutable
+BEFORE UPDATE OR DELETE ON exercise_biomechanical_assessments
+FOR EACH ROW EXECUTE FUNCTION guard_biomechanical_assessment();
+
+CREATE FUNCTION guard_biomechanical_region() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE target_id uuid;
+BEGIN
+    IF TG_OP = 'DELETE' THEN target_id := OLD.assessment_id;
+    ELSE target_id := NEW.assessment_id; END IF;
+    IF TG_OP = 'UPDATE' AND NEW.assessment_id != OLD.assessment_id THEN
+        RAISE EXCEPTION 'A region cannot be moved to another assessment';
+    END IF;
+    PERFORM id FROM exercise_biomechanical_assessments WHERE id = target_id FOR UPDATE;
+    IF EXISTS (SELECT 1 FROM biomechanical_assessment_reviews WHERE assessment_id = target_id) THEN
+        RAISE EXCEPTION 'Reviewed region results are immutable';
+    END IF;
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER biomechanical_region_immutable
+BEFORE INSERT OR UPDATE OR DELETE ON exercise_region_demands
+FOR EACH ROW EXECUTE FUNCTION guard_biomechanical_region();
+
+CREATE FUNCTION guard_biomechanical_review() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        PERFORM id FROM exercise_biomechanical_assessments
+        WHERE id = NEW.assessment_id FOR UPDATE;
+        IF (SELECT count(*) FROM exercise_region_demands WHERE assessment_id = NEW.assessment_id) != 5 THEN
+            RAISE EXCEPTION 'An assessment must contain five regions before review';
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'UPDATE' THEN
+        IF NEW.reviewed_by IS NULL AND OLD.reviewed_by IS NOT NULL
+           AND (to_jsonb(NEW) - 'reviewed_by') = (to_jsonb(OLD) - 'reviewed_by') THEN
+            RETURN NEW;
+        END IF;
+    END IF;
+    RAISE EXCEPTION 'Review decisions are immutable';
+END $$;
+
+CREATE TRIGGER biomechanical_review_immutable
+BEFORE INSERT OR UPDATE OR DELETE ON biomechanical_assessment_reviews
+FOR EACH ROW EXECUTE FUNCTION guard_biomechanical_review();
+
+UPDATE alembic_version SET version_num='0013' WHERE version_num = '0012';
+
+-- Running upgrade 0013 -> 0014
+ALTER TABLE exercise_region_demands DROP CONSTRAINT ck_exercise_region_demand_reason;
+ALTER TABLE biomechanical_assessment_reviews DROP CONSTRAINT ck_biomechanical_review_notes;
+UPDATE alembic_version SET version_num='0014' WHERE version_num = '0013';
+
 COMMIT;

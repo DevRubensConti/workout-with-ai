@@ -8,7 +8,7 @@ from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect, select
 
 from src.auth.permissions import ROLE_PERMISSIONS
-from src.workouts.models import DisabledExercise, Exercise
+from src.workouts.exercises.models import DisabledExercise, Exercise
 from tests.test_exercises_api import register, seed_exercises
 
 

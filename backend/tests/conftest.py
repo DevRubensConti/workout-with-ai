@@ -18,11 +18,11 @@ from sqlalchemy import create_engine, event  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
+from src import workouts  # noqa: E402, F401
 from src.auth import models  # noqa: E402, F401
 from src.database import Base, get_session  # noqa: E402
 from src.main import app  # noqa: E402
 from src.social import models as social_models  # noqa: E402, F401
-from src.workouts import models as workouts_models  # noqa: E402, F401
 
 
 @pytest.fixture()

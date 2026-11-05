@@ -7,14 +7,14 @@ from sqlalchemy.orm import Session
 from src.auth.dependencies import require_permissions
 from src.auth.models import User
 from src.database import get_session
-from src.workouts import plan_service
-from src.workouts.plan_schemas import (
+from src.workouts.exercises.schemas import ExerciseLocale
+from src.workouts.plans import service as plan_service
+from src.workouts.plans.schemas import (
     PlanStatusFilter,
     WorkoutPlanDetail,
     WorkoutPlanIn,
     WorkoutPlanSummary,
 )
-from src.workouts.schemas import ExerciseLocale
 
 router = APIRouter()
 

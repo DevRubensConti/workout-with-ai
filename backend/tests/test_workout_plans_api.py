@@ -6,7 +6,8 @@ from sqlalchemy import select
 
 from src.auth.models import User
 from src.main import app
-from src.workouts.models import Exercise, ExerciseTranslation, WorkoutSession
+from src.workouts.exercises.models import Exercise, ExerciseTranslation
+from src.workouts.sessions.models import WorkoutSession
 
 
 def register(client, email="ana@example.com"):

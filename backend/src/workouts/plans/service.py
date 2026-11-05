@@ -9,14 +9,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, lazyload
 
 from src.auth.models import utcnow
-from src.workouts.models import (
-    Exercise,
+from src.workouts.exercises.models import Exercise
+from src.workouts.exercises.schemas import ExerciseLocale
+from src.workouts.plans.models import (
     PlanStatus,
     WorkoutDay,
     WorkoutDayExercise,
     WorkoutPlan,
 )
-from src.workouts.plan_schemas import (
+from src.workouts.plans.schemas import (
     PlanStatusFilter,
     WorkoutDayIn,
     WorkoutDayOut,
@@ -26,7 +27,6 @@ from src.workouts.plan_schemas import (
     WorkoutPlanIn,
     WorkoutPlanSummary,
 )
-from src.workouts.schemas import ExerciseLocale
 
 # Posições são únicas por (plano, dia) e (dia, posição). Para reordenar sem violar a
 # restrição no meio da atualização, as linhas mantidas vão primeiro para esta faixa.

@@ -7,6 +7,7 @@ import {
   House,
   LogOut,
   Moon,
+  SlidersHorizontal,
   Sun,
   User,
 } from 'lucide-react';
@@ -38,6 +39,7 @@ const mobileIcons = {
   exercises: Dumbbell,
   workouts: ClipboardList,
   history: History,
+  'biomechanical-scale': SlidersHorizontal,
 };
 
 export function Navbar({ navItems }: NavbarProps) {

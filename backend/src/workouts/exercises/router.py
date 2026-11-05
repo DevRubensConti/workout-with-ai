@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from src.auth.dependencies import require_permissions
 from src.auth.models import User
 from src.database import get_session
-from src.workouts.availability import set_availability
-from src.workouts.schemas import (
+from src.workouts.exercises.availability import set_availability
+from src.workouts.exercises.schemas import (
     ExerciseAvailabilityIn,
     ExerciseBulkAvailabilityResponse,
     ExerciseDetail,
@@ -16,7 +16,7 @@ from src.workouts.schemas import (
     ExerciseLocale,
     ExerciseQueryFilters,
 )
-from src.workouts.service import get_exercise, list_exercises, set_filtered_availability
+from src.workouts.exercises.service import get_exercise, list_exercises, set_filtered_availability
 
 router = APIRouter()
 

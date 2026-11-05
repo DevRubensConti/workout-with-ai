@@ -1,7 +1,7 @@
 import pytest
 
+from src.workouts.exercises.models import Exercise, ExerciseTranslation
 from src.workouts.generator.service import CATALOG_SOURCE
-from src.workouts.models import Exercise, ExerciseTranslation
 from tests.test_workout_generator import build_catalog
 
 BODY = {

@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 
 from src.scripts.import_exercise_translations import import_translations
 from src.scripts.import_exercises import SOURCE, CatalogExercise
-from src.workouts.models import Exercise, ExerciseTranslation
+from src.workouts.exercises.models import Exercise, ExerciseTranslation
 
 
 def record(source_id, name, instructions):

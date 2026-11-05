@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ExerciseImage } from '@/components/exercises/exercise-image';
 import { ExercisePicker } from '@/components/workouts/exercise-picker';
+import { ExerciseReplacement } from '@/components/workouts/exercise-replacement';
 import { GenerationPanel } from '@/components/workouts/generation-panel';
 import { Button } from '@/components/ui/button';
 import {
@@ -533,7 +534,33 @@ export function WorkoutBuilder({
                             {muscleLabel(entry.exercise.muscle_group)}
                           </p>
                         </div>
-                        <div className="flex w-full shrink-0 justify-end border-t pt-1 sm:w-auto sm:border-0 sm:pt-0">
+                        <div className="flex w-full shrink-0 flex-wrap justify-end gap-1 border-t pt-1 sm:w-auto sm:border-0 sm:pt-0">
+                          <ExerciseReplacement
+                            mode="draft"
+                            name={entry.exercise.name}
+                            disabled={saving}
+                            getContext={() => {
+                              const problem = validateDraft(draft);
+                              if (problem) throw new Error(problem);
+                              return {
+                                mode: 'draft',
+                                workout: draftToPayload(draft),
+                                day_index: dayIndex,
+                                exercise_index: index,
+                              };
+                            }}
+                            onApplied={(option) => {
+                              patchExercise(dayIndex, entry.key, {
+                                exercise: option.exercise,
+                                weight: '',
+                                tempo: null,
+                                notes: '',
+                              });
+                              toast.success(
+                                'Exercício trocado no rascunho. Salve para confirmar.'
+                              );
+                            }}
+                          />
                           <Button
                             variant="ghost"
                             size="icon"

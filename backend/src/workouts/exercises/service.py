@@ -3,9 +3,9 @@ from uuid import UUID
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
-from src.workouts.availability import enabled_exercises, visible_exercises
-from src.workouts.models import DisabledExercise, Exercise, ExerciseTranslation
-from src.workouts.schemas import (
+from src.workouts.exercises.availability import enabled_exercises, visible_exercises
+from src.workouts.exercises.models import DisabledExercise, Exercise, ExerciseTranslation
+from src.workouts.exercises.schemas import (
     ExerciseBulkAvailabilityResponse,
     ExerciseDetail,
     ExerciseFilters,

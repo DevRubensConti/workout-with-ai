@@ -13,8 +13,9 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { ExerciseImage } from '@/components/exercises/exercise-image';
+import { ExerciseImageViewer } from '@/components/exercises/exercise-image-viewer';
 import { ExerciseProgress } from '@/components/sessions/exercise-progress';
+import { ExerciseReplacement } from '@/components/workouts/exercise-replacement';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -131,7 +132,9 @@ export function SessionRunner({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [effort, setEffort] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState<'finish' | 'cancel' | null>(null);
+  const [busy, setBusy] = useState<'finish' | 'cancel' | 'replace' | null>(
+    null
+  );
   const [exerciseIndex, setExerciseIndex] = useState(() => {
     const first = initialRows.findIndex((exercise) =>
       exercise.sets.some((set) => !set.completed)
@@ -485,10 +488,9 @@ export function SessionRunner({
             >
               <div className="flex items-start gap-3">
                 <span className="bg-muted relative h-14 w-20 shrink-0 overflow-hidden rounded-lg">
-                  <ExerciseImage
-                    key={exercise.images[0] ?? 'empty'}
-                    path={exercise.images[0]}
-                    alt=""
+                  <ExerciseImageViewer
+                    images={exercise.images}
+                    alt={exercise.name}
                     sizes="80px"
                   />
                 </span>
@@ -515,6 +517,57 @@ export function SessionRunner({
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="mt-3">
+                <ExerciseReplacement
+                  mode="session"
+                  name={exercise.name}
+                  disabled={
+                    busy !== null ||
+                    !exercise.sets.some((set) => !set.completed)
+                  }
+                  onOpenChange={(open) => setBusy(open ? 'replace' : null)}
+                  getContext={async () => {
+                    if (timer.current !== null) {
+                      window.clearTimeout(timer.current);
+                      timer.current = null;
+                    }
+                    if (!(await persist())) {
+                      throw new Error(
+                        'Salve valores válidos nas séries antes de trocar o exercício.'
+                      );
+                    }
+                    return {
+                      mode: 'session',
+                      session_id: session.id,
+                      exercise_id: exercise.exerciseId,
+                    };
+                  }}
+                  onApplied={(option, result) => {
+                    if (!result?.session) {
+                      throw new Error(
+                        'A sessão atualizada não foi recebida. Recarregue o treino.'
+                      );
+                    }
+                    const updated = rowsFromSession(result.session);
+                    rowsRef.current = updated;
+                    setRows(updated);
+                    setSaveState('saved');
+                    setRestEnd(null);
+                    setExerciseIndex(
+                      Math.max(
+                        0,
+                        updated.findIndex(
+                          (item) => item.exerciseId === option.exercise.id
+                        )
+                      )
+                    );
+                    toast.success(
+                      'Séries restantes e plano atualizados. Revise a carga do novo exercício.'
+                    );
+                  }}
+                />
               </div>
 
               {exercise.target?.notes && (

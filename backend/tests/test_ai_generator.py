@@ -12,8 +12,8 @@ from sqlalchemy import select
 
 from src.auth.models import User
 from src.config import get_settings
+from src.workouts.exercises.models import DisabledExercise, Exercise
 from src.workouts.generator import ai_service, rules
-from src.workouts.models import DisabledExercise, Exercise
 from tests.test_training_profile import PROFILE
 from tests.test_workout_generator_api import BODY, register, seeded  # noqa: F401
 

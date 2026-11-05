@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from src.auth.dependencies import require_permissions
 from src.auth.models import User
 from src.database import get_session
-from src.workouts import session_service
-from src.workouts.session_schemas import (
+from src.workouts.sessions import service as session_service
+from src.workouts.sessions.schemas import (
     ConsistencyProgress,
     ExerciseProgress,
     SessionDetail,
